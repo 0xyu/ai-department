@@ -36,19 +36,33 @@ export function Scene() {
   const cards = useMemo(() => actions.filter((a) => a.kind === 'fly_card'), [actions]);
   const select = useDept((s) => s.select);
   return (
-    <Canvas shadows camera={{ position: [0, 21, 18], fov: 45 }} onPointerMissed={() => select(null)}>
-      <color attach="background" args={['#bcd3e6']} />
-      <hemisphereLight args={['#ffffff', '#8d7b68', 0.9]} />
+    <Canvas shadows="soft" camera={{ position: [0, 21, 18], fov: 45 }} onPointerMissed={() => select(null)}>
+      <color attach="background" args={['#dcdde8']} />
+      <fog attach="fog" args={['#dcdde8', 50, 95]} />
+      {/* outside ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.24, 0]} receiveShadow>
+        <planeGeometry args={[200, 200]} />
+        <meshStandardMaterial color="#d9dae6" roughness={1} />
+      </mesh>
+      <hemisphereLight args={['#f1f2ff', '#b9b3c9', 1.1]} />
+      <ambientLight intensity={0.25} color="#fff4e8" />
+      {/* warm afternoon sun streaming through the left windows */}
       <directionalLight
-        position={[8, 16, 6]}
-        intensity={1.4}
+        position={[-20, 15, -2]}
+        intensity={2.4}
+        color="#ffe9cc"
         castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-16}
-        shadow-camera-right={16}
-        shadow-camera-top={12}
-        shadow-camera-bottom={-12}
+        shadow-mapSize={[4096, 4096]}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.03}
+        shadow-camera-left={-22}
+        shadow-camera-right={22}
+        shadow-camera-top={22}
+        shadow-camera-bottom={-22}
+        shadow-camera-far={70}
       />
+      {/* cool fill from the front-right */}
+      <directionalLight position={[12, 14, 16]} intensity={0.45} color="#dfe6ff" />
       <Office />
       {agentsOrder.map((id) => (agents[id] ? <Character key={id} agent={agents[id]} /> : null))}
       {cards.map((c) => (

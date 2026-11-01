@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
+import { Html, RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import { useDept } from '../store';
 import type { Agent, AgentId } from '../types';
@@ -18,69 +18,107 @@ const IDLE_TO_PANTRY_MS = 25_000;
 const HANDOFF_PAUSE = 1.2; // seconds standing at the receiver's desk
 
 function mat(color: string) {
-  return <meshStandardMaterial color={color} flatShading roughness={0.7} />;
+  return <meshStandardMaterial color={color} flatShading roughness={0.75} />;
+}
+
+// chibi proportions
+const HIP = 0.62; // hip height when standing
+const SIT = 0.1; // how far the body drops when sitting
+const HEAD_Y = 1.5; // head centre
+const FACE_Z = 0.28; // front of the face
+const SKIN = '#f6d2b3';
+const PANTS = '#3d4250';
+
+const HAIR: Record<AgentId, string> = {
+  max: '#2b1d14',
+  dev: '#5a3720',
+  ops: '#7a4b26',
+  sec: '#1d1d22',
+  qa: '#4a2e1c',
+  doc: '#8a5a2b',
+};
+
+/** Blocky hair: cap + back + sides + chunky fringe. */
+function Hair({ color, short = false }: { color: string; short?: boolean }) {
+  return (
+    <group>
+      <RoundedBox args={[0.68, 0.24, 0.62]} radius={0.09} smoothness={2} position={[0, HEAD_Y + 0.27, -0.02]} castShadow>
+        {mat(color)}
+      </RoundedBox>
+      <RoundedBox args={[0.66, short ? 0.3 : 0.44, 0.16]} radius={0.06} smoothness={2} position={[0, HEAD_Y + (short ? 0.12 : 0.05), -0.22]} castShadow>
+        {mat(color)}
+      </RoundedBox>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * 0.32, HEAD_Y + 0.1, -0.03]}>
+          <boxGeometry args={[0.07, 0.3, 0.44]} />
+          {mat(color)}
+        </mesh>
+      ))}
+      {[-0.2, -0.04, 0.13, 0.25].map((x, i) => (
+        <mesh key={i} position={[x, HEAD_Y + 0.17 - (i % 2) * 0.03, FACE_Z - 0.01]} rotation={[0.2, 0, (i - 1.5) * 0.12]} castShadow>
+          <boxGeometry args={[0.17, 0.13 + (i % 2) * 0.04, 0.08]} />
+          {mat(color)}
+        </mesh>
+      ))}
+    </group>
+  );
 }
 
 function Accessory({ id, color }: { id: AgentId; color: string }) {
   switch (id) {
-    case 'max': // tie + slicked hair
+    case 'max': // red tie
       return (
         <group>
-          <mesh position={[0, 1.22, 0.265]} rotation={[0.1, 0, 0]}>
-            <boxGeometry args={[0.09, 0.32, 0.02]} />
-            {mat('#b91c1c')}
+          <mesh position={[0, 0.93, 0.165]}>
+            <boxGeometry args={[0.07, 0.28, 0.02]} />
+            {mat('#c0392b')}
           </mesh>
-          <mesh position={[0, 1.39, 0.255]}>
-            <boxGeometry args={[0.13, 0.06, 0.03]} />
-            {mat('#b91c1c')}
-          </mesh>
-          <mesh position={[0, 1.86, -0.03]} scale={[1, 0.55, 1]}>
-            <sphereGeometry args={[0.235, 8, 6]} />
-            {mat('#3b2a1a')}
+          <mesh position={[0, 1.1, 0.165]}>
+            <boxGeometry args={[0.1, 0.06, 0.03]} />
+            {mat('#a93226')}
           </mesh>
         </group>
       );
     case 'dev': // headphones
       return (
-        <group position={[0, 1.74, 0]}>
-          <mesh rotation={[0, 0, 0]}>
-            <torusGeometry args={[0.26, 0.03, 4, 12, Math.PI]} />
-            {mat('#111827')}
+        <group position={[0, HEAD_Y + 0.02, 0]}>
+          <mesh>
+            <torusGeometry args={[0.38, 0.035, 4, 12, Math.PI]} />
+            {mat('#1f2430')}
           </mesh>
           {[-1, 1].map((s) => (
-            <mesh key={s} position={[s * 0.25, -0.02, 0]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[0.09, 0.09, 0.07, 8]} />
-              {mat('#111827')}
+            <mesh key={s} position={[s * 0.36, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.12, 0.12, 0.08, 8]} />
+              {mat('#1f2430')}
             </mesh>
           ))}
         </group>
       );
     case 'ops': // hard hat
       return (
-        <group position={[0, 1.8, 0]}>
-          <mesh>
-            <sphereGeometry args={[0.26, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            {mat('#facc15')}
+        <group position={[0, HEAD_Y + 0.24, 0]}>
+          <mesh scale={[1, 0.8, 1]} castShadow>
+            <sphereGeometry args={[0.38, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            {mat('#f5c518')}
           </mesh>
           <mesh position={[0, 0.0, 0.05]}>
-            <cylinderGeometry args={[0.33, 0.33, 0.03, 10]} />
-            {mat('#eab308')}
+            <cylinderGeometry args={[0.44, 0.44, 0.04, 10]} />
+            {mat('#e0ad0c')}
           </mesh>
         </group>
       );
     case 'sec': // sunglasses + cap
       return (
         <group>
-          <mesh position={[0, 1.76, 0.2]}>
-            <boxGeometry args={[0.36, 0.08, 0.04]} />
+          <mesh position={[0, HEAD_Y, FACE_Z + 0.02]}>
+            <boxGeometry args={[0.48, 0.11, 0.03]} />
             {mat('#0b0b0b')}
           </mesh>
-          <mesh position={[0, 1.88, 0]} scale={[1, 0.5, 1]}>
-            <sphereGeometry args={[0.245, 8, 6]} />
+          <RoundedBox args={[0.7, 0.16, 0.64]} radius={0.06} smoothness={2} position={[0, HEAD_Y + 0.35, -0.01]} castShadow>
             {mat('#1f2937')}
-          </mesh>
-          <mesh position={[0, 1.86, 0.2]} rotation={[0.2, 0, 0]}>
-            <boxGeometry args={[0.3, 0.02, 0.2]} />
+          </RoundedBox>
+          <mesh position={[0, HEAD_Y + 0.28, 0.4]}>
+            <boxGeometry args={[0.52, 0.03, 0.26]} />
             {mat('#1f2937')}
           </mesh>
         </group>
@@ -89,13 +127,17 @@ function Accessory({ id, color }: { id: AgentId; color: string }) {
       return (
         <group>
           {[-1, 1].map((s) => (
-            <mesh key={s} position={[s * 0.09, 1.76, 0.22]}>
-              <torusGeometry args={[0.06, 0.012, 4, 10]} />
+            <mesh key={s} position={[s * 0.13, HEAD_Y, FACE_Z + 0.015]}>
+              <torusGeometry args={[0.08, 0.013, 4, 10]} />
               {mat('#111')}
             </mesh>
           ))}
-          <mesh position={[0.3, 1.0, 0.18]} rotation={[0.3, 0, 0]}>
-            <boxGeometry args={[0.22, 0.3, 0.02]} />
+          <mesh position={[0, HEAD_Y + 0.01, FACE_Z + 0.015]}>
+            <boxGeometry args={[0.08, 0.015, 0.015]} />
+            {mat('#111')}
+          </mesh>
+          <mesh position={[0.36, 0.8, 0.14]} rotation={[0.3, 0, 0]}>
+            <boxGeometry args={[0.2, 0.28, 0.02]} />
             {mat('#d6b98c')}
           </mesh>
         </group>
@@ -103,12 +145,12 @@ function Accessory({ id, color }: { id: AgentId; color: string }) {
     case 'doc': // beret + book
       return (
         <group>
-          <mesh position={[0.04, 1.93, 0]} rotation={[0, 0, 0.25]}>
-            <cylinderGeometry args={[0.23, 0.26, 0.08, 10]} />
+          <mesh position={[0.05, HEAD_Y + 0.42, 0]} rotation={[0, 0, 0.22]} castShadow>
+            <cylinderGeometry args={[0.3, 0.35, 0.1, 10]} />
             {mat('#7f1d1d')}
           </mesh>
-          <mesh position={[-0.3, 1.0, 0.16]} rotation={[0.2, 0, 0]}>
-            <boxGeometry args={[0.2, 0.26, 0.06]} />
+          <mesh position={[-0.36, 0.8, 0.13]} rotation={[0.2, 0, 0]}>
+            <boxGeometry args={[0.18, 0.24, 0.06]} />
             {mat(color === '#ec4899' ? '#1e3a8a' : '#333')}
           </mesh>
         </group>
@@ -223,10 +265,10 @@ export function Character({ agent }: { agent: Agent }) {
     const s = sitAmount.current;
     root.current.position.set(pos.current.x, walking ? Math.abs(Math.sin(t * 10)) * 0.05 : 0, pos.current.z);
     root.current.rotation.y = pos.current.rot;
-    upper.current.position.y = -0.24 * s;
+    upper.current.position.y = -SIT * s;
     const swing = walking ? Math.sin(t * 10) * 0.6 : 0;
-    legL.current.position.y = 0.78 - 0.24 * s;
-    legR.current.position.y = 0.78 - 0.24 * s;
+    legL.current.position.y = HIP - SIT * s;
+    legR.current.position.y = HIP - SIT * s;
     legL.current.rotation.x = -Math.PI / 2 * s + swing;
     legR.current.rotation.x = -Math.PI / 2 * s - swing;
     const typing = !walking && g.pose === 'type';
@@ -241,6 +283,9 @@ export function Character({ agent }: { agent: Agent }) {
   });
 
   const blocked = p.state === 'blocked';
+  const hair = HAIR[id] ?? '#4a2e1c';
+  // pastel shirt tinted with the agent's colour (keeps identity, matches the soft look)
+  const shirt = useMemo(() => `#${new THREE.Color(agent.color).lerp(new THREE.Color('#ffffff'), 0.45).getHexString()}`, [agent.color]);
   let bubble = '';
   if (myAction) bubble = `交接任务 #${myAction.taskId}`;
   else if (p.state === 'working' || p.state === 'blocked' || p.state === 'meeting') bubble = p.activity;
@@ -260,42 +305,88 @@ export function Character({ agent }: { agent: Agent }) {
         [legL, -0.12],
         [legR, 0.12],
       ].map(([ref, x], i) => (
-        <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 0.78, 0]}>
-          <mesh position={[0, -0.38, 0]} castShadow>
-            <capsuleGeometry args={[0.1, 0.5, 2, 6]} />
-            {mat('#334155')}
-          </mesh>
+        <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, HIP, 0]}>
+          <RoundedBox args={[0.18, 0.52, 0.2]} radius={0.05} smoothness={2} position={[0, -0.26, 0]} castShadow>
+            {mat(PANTS)}
+          </RoundedBox>
+          <RoundedBox args={[0.2, 0.1, 0.28]} radius={0.035} smoothness={2} position={[0, -0.56, 0.04]} castShadow>
+            {mat('#2a2d35')}
+          </RoundedBox>
         </group>
       ))}
       <group ref={upper}>
-        {/* torso */}
-        <mesh position={[0, 1.12, 0]} castShadow>
-          <capsuleGeometry args={[0.27, 0.42, 3, 8]} />
-          {mat(agent.color)}
-        </mesh>
-        {/* head */}
-        <mesh position={[0, 1.72, 0]} castShadow>
-          <sphereGeometry args={[0.24, 10, 8]} />
-          {mat('#f1c9a5')}
-        </mesh>
+        {/* hips */}
+        <RoundedBox args={[0.46, 0.16, 0.28]} radius={0.05} smoothness={2} position={[0, HIP + 0.04, 0]} castShadow>
+          {mat(PANTS)}
+        </RoundedBox>
+        {/* torso (shirt) + collar + lanyard badge */}
+        <RoundedBox args={[0.52, 0.5, 0.3]} radius={0.08} smoothness={2} position={[0, 0.96, 0]} castShadow>
+          {mat(shirt)}
+        </RoundedBox>
         {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * 0.08, 1.75, 0.21]}>
-            <sphereGeometry args={[0.03, 5, 4]} />
-            {mat('#1f2937')}
+          <mesh key={s} position={[s * 0.08, 1.19, 0.12]} rotation={[0.3, 0, s * -0.5]}>
+            <boxGeometry args={[0.13, 0.05, 0.1]} />
+            {mat('#ffffff')}
           </mesh>
         ))}
+        {[-1, 1].map((s) => (
+          <mesh key={'l' + s} position={[s * 0.06, 1.05, 0.155]} rotation={[0, 0, s * 0.28]}>
+            <boxGeometry args={[0.025, 0.24, 0.01]} />
+            {mat('#2f4fa8')}
+          </mesh>
+        ))}
+        <mesh position={[0, 0.88, 0.16]}>
+          <boxGeometry args={[0.1, 0.13, 0.015]} />
+          {mat('#f8fafc')}
+        </mesh>
+        <mesh position={[0, 0.91, 0.168]}>
+          <boxGeometry args={[0.07, 0.03, 0.005]} />
+          {mat(agent.color)}
+        </mesh>
+        {/* big blocky head */}
+        <RoundedBox args={[0.6, 0.56, 0.54]} radius={0.14} smoothness={3} position={[0, HEAD_Y, 0]} castShadow>
+          {mat(SKIN)}
+        </RoundedBox>
+        {/* face: eyes, brows, blush, mouth */}
+        {[-1, 1].map((s) => (
+          <group key={s}>
+            <mesh position={[s * 0.13, HEAD_Y - 0.02, FACE_Z]}>
+              <boxGeometry args={[0.065, 0.1, 0.02]} />
+              {mat('#2a211d')}
+            </mesh>
+            <mesh position={[s * 0.115, HEAD_Y - 0.0, FACE_Z + 0.005]}>
+              <boxGeometry args={[0.02, 0.025, 0.02]} />
+              {mat('#ffffff')}
+            </mesh>
+            <mesh position={[s * 0.13, HEAD_Y + 0.09, FACE_Z - 0.005]} rotation={[0, 0, s * -0.12]}>
+              <boxGeometry args={[0.1, 0.022, 0.02]} />
+              {mat(hair)}
+            </mesh>
+            <mesh position={[s * 0.2, HEAD_Y - 0.11, FACE_Z - 0.01]}>
+              <boxGeometry args={[0.08, 0.035, 0.02]} />
+              {mat('#f3a59c')}
+            </mesh>
+          </group>
+        ))}
+        <mesh position={[0, HEAD_Y - 0.14, FACE_Z]}>
+          <boxGeometry args={[0.06, 0.018, 0.02]} />
+          {mat('#9a5a4a')}
+        </mesh>
+        {id !== 'ops' && <Hair color={hair} short={id === 'sec' || id === 'max'} />}
         {/* arms (pivot at the shoulder) */}
         {[
-          [armL, -0.36],
-          [armR, 0.36],
+          [armL, -0.33],
+          [armR, 0.33],
         ].map(([ref, x], i) => (
-          <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 1.36, 0]}>
-            <mesh position={[0, -0.26, 0]} castShadow>
-              <capsuleGeometry args={[0.08, 0.36, 2, 6]} />
-              {mat(agent.color)}
-            </mesh>
+          <group key={i} ref={ref as React.RefObject<THREE.Group>} position={[x as number, 1.15, 0]}>
+            <RoundedBox args={[0.15, 0.36, 0.17]} radius={0.05} smoothness={2} position={[0, -0.16, 0]} castShadow>
+              {mat(shirt)}
+            </RoundedBox>
+            <RoundedBox args={[0.13, 0.11, 0.13]} radius={0.04} smoothness={2} position={[0, -0.39, 0]} castShadow>
+              {mat(SKIN)}
+            </RoundedBox>
             {i === 1 && myAction && (
-              <mesh position={[0, -0.5, 0.08]}>
+              <mesh position={[0, -0.44, 0.1]}>
                 <boxGeometry args={[0.28, 0.04, 0.36]} />
                 {mat('#fde68a')}
               </mesh>
@@ -303,13 +394,13 @@ export function Character({ agent }: { agent: Agent }) {
           </group>
         ))}
         <Accessory id={id} color={agent.color} />
-        {selected && (
-          <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.45, 0.55, 20]} />
-            <meshBasicMaterial color={agent.color} />
-          </mesh>
-        )}
       </group>
+      {selected && (
+        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.45, 0.55, 24]} />
+          <meshBasicMaterial color={agent.color} />
+        </mesh>
+      )}
 
       {blocked && (
         <group ref={alert}>
