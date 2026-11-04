@@ -5,3 +5,4 @@
 - [2026-11-01 20:23] (任务 #3 编写自动化测试) Tests for CLIs reading sys.stdin.buffer: use subprocess with input bytes; use tempfile.TemporaryDirectory (auto-cleanup, no rm needed).
 - [2026-11-01 20:33] (任务 #6 开发网站在线监控脚本) urllib monitors: catch HTTPError before URLError, plus generic Exception (ValueError for bad URL); test with local ThreadingHTTPServer on port 0.
 - [2026-11-01 20:36] (任务 #9 删除 sample/ 旧示例目录) Deleting a specified dir: list_files before and after to verify; rm -rf with an absolute explicit path ran fine in sandbox.
+- [2026-11-01 21:13] (任务 #12 实现 hello world web 服务) http.server tests: use make_server(0,'127.0.0.1') + daemon thread, shutdown+server_close in tearDownClass; unittest discover -s tests needs sys.path insert of parent.
