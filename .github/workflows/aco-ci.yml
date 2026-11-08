@@ -1,0 +1,46 @@
+name: aco-ci
+
+on:
+  push:
+    paths: ["orchestrator/**", ".github/workflows/aco-ci.yml"]
+  pull_request:
+    paths: ["orchestrator/**", ".github/workflows/aco-ci.yml"]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: orchestrator
+    shell: bash
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: orchestrator/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: go vet
+        run: go vet ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: No model vendor SDKs or AI Department imports
+        run: |
+          if go list -deps ./... | grep -Ei 'anthropic|openai|ai-department'; then
+            echo "forbidden dependency found"; exit 1
+          fi
+      - name: CGO-free build
+        env:
+          CGO_ENABLED: "0"
+        run: go build ./...
+      - name: Test (race)
+        run: go test -race -count=1 ./...
