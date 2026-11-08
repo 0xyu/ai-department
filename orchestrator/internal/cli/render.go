@@ -9,13 +9,14 @@ import (
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/doctor"
 	"github.com/0xyu/aco/internal/i18n"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 // renderFlagError maps the standard flag package's English errors to catalog
 // messages. It never forwards the package's text for a rejected value: that
 // text embeds the value quoted and escaped, which could be a credential the
 // literal secret filter no longer recognizes.
-func renderFlagError(p *i18n.Printer, err error, bad badValue) {
+func renderFlagError(p *i18n.Printer, red *secure.Redactor, err error, bad badValue) {
 	if bad.name != "" {
 		typ := i18n.CLITypeInteger
 		if bad.kind == kindBool {
@@ -27,7 +28,7 @@ func renderFlagError(p *i18n.Printer, err error, bad badValue) {
 	msg := err.Error()
 	switch {
 	case strings.HasPrefix(msg, "flag provided but not defined: "):
-		p.Say(i18n.CLIErrUnknownFlag, strings.TrimPrefix(msg, "flag provided but not defined: "))
+		p.Say(i18n.CLIErrUnknownFlag, red.Echo(strings.TrimPrefix(msg, "flag provided but not defined: ")))
 	case strings.HasPrefix(msg, "flag needs an argument: "):
 		p.Say(i18n.CLIErrFlagNeedsArg, strings.TrimPrefix(msg, "flag needs an argument: "))
 	default:
@@ -49,16 +50,19 @@ func location(e config.FieldError) i18n.Msg {
 	}
 }
 
-// fieldErrorMsg turns a config error into a catalog message.
-func fieldErrorMsg(e config.FieldError) i18n.Msg {
+// fieldErrorMsg turns a config error into a catalog message. Field paths are
+// rendered by config.DisplayPath, so a key the user typed (an unknown field,
+// a map key) is never repeated; the location still points at it.
+func fieldErrorMsg(e config.FieldError, red *secure.Redactor) i18n.Msg {
 	loc := location(e)
+	e.Field = config.DisplayPath(e.Field)
 	switch e.Code {
 	case config.ErrParse:
 		return i18n.M(i18n.ConfigErrParse, loc, e.Value)
 	case config.ErrUnknownField:
 		return i18n.M(i18n.ConfigErrUnknownField, loc, e.Field)
 	case config.ErrUnknownGateType:
-		return i18n.M(i18n.ConfigErrUnknownGateType, loc, e.Value, e.Allowed)
+		return i18n.M(i18n.ConfigErrUnknownGateType, loc, secure.Hidden, e.Allowed) // e.Value is the unknown key
 	case config.ErrSecretField:
 		return i18n.M(i18n.ConfigErrSecretField, loc, e.Field)
 	case config.ErrInvalidType:
@@ -67,13 +71,13 @@ func fieldErrorMsg(e config.FieldError) i18n.Msg {
 		}
 		return i18n.M(i18n.ConfigErrInvalidType, loc, e.Field, e.Allowed)
 	case config.ErrInvalidValue:
-		return i18n.M(i18n.ConfigErrInvalidValue, loc, e.Field, e.Value, e.Allowed)
+		return i18n.M(i18n.ConfigErrInvalidValue, loc, e.Field, red.Echo(e.Value), e.Allowed)
 	case config.ErrOutOfRange:
-		return i18n.M(i18n.ConfigErrOutOfRange, loc, e.Field, e.Value, e.Allowed)
+		return i18n.M(i18n.ConfigErrOutOfRange, loc, e.Field, red.Echo(e.Value), e.Allowed)
 	case config.ErrInvalidDuration:
-		return i18n.M(i18n.ConfigErrInvalidDuration, loc, e.Field, e.Value)
+		return i18n.M(i18n.ConfigErrInvalidDuration, loc, e.Field, red.Echo(e.Value))
 	case config.ErrUnsupportedVersion:
-		return i18n.M(i18n.ConfigErrUnsupportedVersion, loc, e.Value, e.Allowed)
+		return i18n.M(i18n.ConfigErrUnsupportedVersion, loc, red.Echo(e.Value), e.Allowed)
 	case config.ErrRequired:
 		return i18n.M(i18n.ConfigErrRequired, loc, e.Field)
 	case config.ErrFileNotFound:
@@ -85,7 +89,7 @@ func fieldErrorMsg(e config.FieldError) i18n.Msg {
 	}
 }
 
-func renderConfigError(p *i18n.Printer, err error) {
+func renderConfigError(p *i18n.Printer, red *secure.Redactor, err error) {
 	var ce config.Errors
 	if !errors.As(err, &ce) {
 		p.Say(i18n.CLIErrInternal, err.Error())
@@ -93,11 +97,11 @@ func renderConfigError(p *i18n.Printer, err error) {
 	}
 	p.Say(i18n.ConfigErrHeader)
 	for _, e := range ce {
-		p.Say(i18n.ConfigErrBullet, fieldErrorMsg(e))
+		p.Say(i18n.ConfigErrBullet, fieldErrorMsg(e, red))
 	}
 }
 
-func renderAuthError(p *i18n.Printer, err error) {
+func renderAuthError(p *i18n.Printer, red *secure.Redactor, err error) {
 	var ae auth.Errors
 	if !errors.As(err, &ae) {
 		p.Say(i18n.CLIErrInternal, err.Error())
@@ -105,7 +109,7 @@ func renderAuthError(p *i18n.Printer, err error) {
 	}
 	p.Say(i18n.AuthErrHeader)
 	for _, e := range ae {
-		p.Say(i18n.ConfigErrBullet, i18n.M(i18n.AuthErrInvalid, doctor.SourceMsg(e.Source), e.Value, e.Allowed))
+		p.Say(i18n.ConfigErrBullet, i18n.M(i18n.AuthErrInvalid, doctor.SourceMsg(e.Source), red.Echo(e.Value), e.Allowed))
 	}
 }
 

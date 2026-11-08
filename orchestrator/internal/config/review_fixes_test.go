@@ -126,7 +126,13 @@ func TestNonFiniteFloatsRejected(t *testing.T) {
 				}
 			}
 			es = loadErrs(t, LoadOptions{Overrides: []string{f.field + "=" + v}})
-			if !es.Has(f.field, ErrOutOfRange) || es[0].Layer != LayerFlags || es[0].Source != "--set "+f.field || es[0].Line != 0 {
+			// A map key (pricing.codex.<model>) is user-written, so that
+			// override is named by position, not by its key.
+			wantSrc := "--set " + f.field
+			if strings.HasPrefix(f.field, "pricing.codex.") {
+				wantSrc = "--set #1"
+			}
+			if !es.Has(f.field, ErrOutOfRange) || es[0].Layer != LayerFlags || es[0].Source != wantSrc || es[0].Line != 0 {
 				t.Errorf("--set %s=%s: got %v", f.field, v, es)
 			}
 		}

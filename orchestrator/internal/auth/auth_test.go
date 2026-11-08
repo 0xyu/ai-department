@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/0xyu/aco/internal/config"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 func lookup(m map[string]string) func(string) (string, bool) {
@@ -90,7 +91,7 @@ func TestResolvePrecedence(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var ef *EnvFile
 			if tc.file != nil {
-				ef = &EnvFile{Path: "/home/u/.aco/.env", Found: true, Values: tc.file}
+				ef = NewEnvFile("/home/u/.aco/.env", tc.file)
 			}
 			r, err := Resolve(tc.flags, NewEnv(lookup(tc.env), ef), tc.cfg, cfgOrigin(tc.set...))
 			if err != nil {
@@ -130,7 +131,7 @@ func TestResolveInvalidValuesNameVariable(t *testing.T) {
 	for _, tc := range cases {
 		var ef *EnvFile
 		if tc.file != nil {
-			ef = &EnvFile{Path: "f.env", Found: true, Values: tc.file}
+			ef = NewEnvFile("f.env", tc.file)
 		}
 		if tc.cfg.Mode == "" {
 			tc.cfg.Mode = "subscription"
@@ -178,7 +179,7 @@ func TestCheckKeys(t *testing.T) {
 		t.Errorf("claude api without key: %+v", ks)
 	}
 
-	file := &EnvFile{Path: "p", Found: true, Values: map[string]string{EnvOpenAIKey: "sk-test-123456789"}}
+	file := NewEnvFile("p", map[string]string{EnvOpenAIKey: "sk-test-123456789"})
 	env := NewEnv(lookup(map[string]string{EnvAnthropicKey: "sk-ant-test-123456"}), file)
 	r, _ = Resolve(Flags{AuthMode: "api"}, env, cfg, nil)
 	ks = CheckKeys(r, env, nil)
@@ -201,12 +202,15 @@ func TestCheckKeys(t *testing.T) {
 
 type fakeKeychain map[string]string
 
-func (f fakeKeychain) Lookup(n string) (string, bool) { v, ok := f[n]; return v, ok }
+func (f fakeKeychain) Lookup(n string) (secure.Secret, bool) {
+	v, ok := f[n]
+	return secure.NewSecret(v), ok
+}
 
 func TestParseEnv(t *testing.T) {
 	in := "# comment\n\nACO_AUTH_MODE=api\nexport ACO_CODEX_AUTH_MODE = subscription\r\n" +
 		"EMPTY=\nQUOTED=\"a b\\n#c\"\nSINGLE='x \\n y'\nINLINE=value # trailing\n"
-	got, err := ParseEnv([]byte("\xef\xbb\xbf"+in), "f")
+	got, err := parseEnv([]byte("\xef\xbb\xbf"+in), "f")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,14 +224,14 @@ func TestParseEnv(t *testing.T) {
 		}
 	}
 	for _, bad := range []string{"NOEQUALS\n", "1BAD=x\n", "Q=\"unterminated\n", "S='open\n"} {
-		_, err := ParseEnv([]byte("OK=1\n"+bad), "f.env")
+		_, err := parseEnv([]byte("OK=1\n"+bad), "f.env")
 		var fe *EnvFileError
 		if !errors.As(err, &fe) || fe.Line != 2 {
 			t.Errorf("%q: got %v", bad, err)
 		}
 	}
 	// Syntax errors never echo the line content (it may hold a secret).
-	_, err = ParseEnv([]byte("sk-ant-secretvalue123\n"), "f.env")
+	_, err = parseEnv([]byte("sk-ant-secretvalue123\n"), "f.env")
 	if err == nil || strings.Contains(err.Error(), "secretvalue") {
 		t.Errorf("error leaks content: %v", err)
 	}

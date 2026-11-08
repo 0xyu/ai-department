@@ -17,7 +17,7 @@ import (
 	"github.com/0xyu/aco/internal/auth"
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/i18n"
-	"github.com/0xyu/aco/internal/redact"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 // Status of one check.
@@ -133,7 +133,7 @@ func Run(ctx context.Context, in Input) []Check {
 
 	// ~/.aco writable.
 	if err := checkWritable(in.ACOHome); err != nil {
-		add("aco_home", Fail, i18n.DoctorHomeNotWritable, in.ACOHome, redact.New().String(err.Error()))
+		add("aco_home", Fail, i18n.DoctorHomeNotWritable, in.ACOHome, secure.NewRedactor().String(err.Error()))
 	} else {
 		add("aco_home", OK, i18n.DoctorHomeWritable, in.ACOHome)
 	}
@@ -189,7 +189,7 @@ func toolCheck(ctx context.Context, ex Exec, name string, args []string, min *[3
 	defer cancel()
 	outText, err := ex.Output(cctx, "", name, args...)
 	if err != nil {
-		return Check{ID: id, Status: Fail, Msg: i18n.M(i18n.DoctorToolError, name, firstLine(redact.New().String(err.Error())))}
+		return Check{ID: id, Status: Fail, Msg: i18n.M(i18n.DoctorToolError, name, firstLine(secure.NewRedactor().String(err.Error())))}
 	}
 	v, vs, ok := ParseVersion(outText)
 	if !ok {
@@ -286,7 +286,7 @@ func scrubbedEnv() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
-		if redact.IsSecretVar(k) {
+		if secure.IsSecretVar(k) {
 			continue
 		}
 		env = append(env, kv)

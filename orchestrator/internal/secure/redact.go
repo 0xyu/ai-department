@@ -1,17 +1,23 @@
-// Package redact masks secrets in text: known secret values (from the
-// environment or env file) and well-known credential patterns.
-package redact
+// Known secret values (from the
+// environment or env file) and well-known credential patterns are masked by Redactor.
+package secure
 
 import (
+	"encoding/json"
+	"net/url"
 	"regexp"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 // Mask replaces every redacted secret.
 const Mask = "[REDACTED]"
 
-// minSecretLen avoids masking short values such as "1" or "true".
+// minSecretLen avoids masking short values such as "1" or "true" in free
+// text. Shorter registered secrets are still never echoed (see Echo).
 const minSecretLen = 8
 
 // SecretEnvVars are environment variables whose values are always secret.
@@ -40,27 +46,71 @@ var patterns = []*regexp.Regexp{
 	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
 }
 
-// Redactor masks secrets. The zero value masks patterns only.
+// Redactor masks secrets in text: registered secret values (and their
+// quoted, JSON-escaped, and URL-escaped forms) and the credential patterns.
+// The zero value masks patterns only. It is safe for concurrent use.
 type Redactor struct {
+	mu     sync.RWMutex
 	values []string // sorted longest first
+	short  []string // registered secrets shorter than minSecretLen
 }
 
-// New returns a Redactor that also masks the given literal values.
-func New(values ...string) *Redactor {
+// NewRedactor returns a Redactor that also masks the given secrets.
+func NewRedactor(secrets ...Secret) *Redactor {
 	r := &Redactor{}
-	r.Add(values...)
+	r.AddSecret(secrets...)
 	return r
 }
 
-// Add registers more literal secret values.
-func (r *Redactor) Add(values ...string) {
+// AddSecret registers more secrets.
+func (r *Redactor) AddSecret(secrets ...Secret) {
+	vals := make([]string, 0, len(secrets))
+	for _, s := range secrets {
+		vals = append(vals, s.Reveal())
+	}
+	r.add(vals...)
+}
+
+func (r *Redactor) add(values ...string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for _, v := range values {
 		v = strings.TrimSpace(v)
-		if len(v) >= minSecretLen {
-			r.values = append(r.values, v)
+		if v == "" {
+			continue
+		}
+		if len(v) < minSecretLen {
+			if !slices.Contains(r.short, v) {
+				r.short = append(r.short, v)
+			}
+			continue
+		}
+		for _, form := range encodedForms(v) {
+			if !slices.Contains(r.values, form) {
+				r.values = append(r.values, form)
+			}
 		}
 	}
 	sort.SliceStable(r.values, func(i, j int) bool { return len(r.values[i]) > len(r.values[j]) })
+}
+
+// encodedForms lists v as it may appear in output: raw, inside a Go or JSON
+// quoted string, and URL-escaped.
+func encodedForms(v string) []string {
+	forms := []string{v}
+	q := strconv.Quote(v)
+	forms = append(forms, q[1:len(q)-1])
+	if j, err := json.Marshal(v); err == nil {
+		forms = append(forms, string(j[1:len(j)-1]))
+	}
+	forms = append(forms, url.QueryEscape(v), url.PathEscape(v))
+	out := forms[:0]
+	for _, f := range forms {
+		if !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // AddFromEnv registers the values of secret-looking variables from env.
@@ -71,7 +121,7 @@ func (r *Redactor) AddFromEnv(env map[string]string) {
 			vals = append(vals, v)
 		}
 	}
-	r.Add(vals...)
+	r.add(vals...)
 }
 
 // IsSecretVar reports whether an environment variable name holds a secret.
@@ -87,6 +137,8 @@ func IsSecretVar(name string) bool {
 // String masks all secrets in s.
 func (r *Redactor) String(s string) string {
 	if r != nil {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
 		for _, v := range r.values {
 			if strings.Contains(s, v) {
 				s = strings.ReplaceAll(s, v, Mask)

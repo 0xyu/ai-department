@@ -246,8 +246,9 @@ func decodeError(l layer, err error) FieldError {
 // The value is parsed as YAML, so "true", "5", and "[x, y]" get their types.
 //
 // The returned source names the option and key path ("--set auth.mode") but
-// never the value, which may be a credential. A malformed override is named
-// by its position ("--set #2") because the whole argument may be a secret.
+// never the value, which may be a credential. A malformed override, or one
+// whose key is not a trusted schema path, is named by its position
+// ("--set #2") because the key itself may be a secret.
 func overrideNode(index int, kv string) (*yaml.Node, string, *FieldError) {
 	ordinal := "#" + strconv.Itoa(index+1)
 	key, val, ok := strings.Cut(kv, "=")
@@ -262,7 +263,7 @@ func overrideNode(index int, kv string) (*yaml.Node, string, *FieldError) {
 	if !valid {
 		return nil, "", &FieldError{Layer: LayerFlags, Source: "--set " + ordinal, Code: ErrInvalidOverride, Value: ordinal, Allowed: "key.path=value"}
 	}
-	source := "--set " + key
+	source := overrideSource(ordinal, key)
 	leaf, perr := parseYAML([]byte(val))
 	if perr != nil {
 		// perr.Value is the YAML parser's message, not the raw value.

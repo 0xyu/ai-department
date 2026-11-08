@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/0xyu/aco/internal/config"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 // Mode is an auth mode.
@@ -119,8 +120,12 @@ func NewEnv(lookup func(string) (string, bool), file *EnvFile) *Env {
 // File returns the env file (may be nil).
 func (e *Env) File() *EnvFile { return e.file }
 
-// Lookup returns a non-empty value and its source.
+// Lookup returns a non-empty value and its source. It never returns secret
+// variables (secure.IsSecretVar); use Secret for those.
 func (e *Env) Lookup(name string) (string, Source, bool) {
+	if secure.IsSecretVar(name) {
+		return "", Source{}, false
+	}
 	if v, ok := e.lookup(name); ok && strings.TrimSpace(v) != "" {
 		return strings.TrimSpace(v), Source{Kind: SourceEnv, Name: name}, true
 	}
@@ -130,6 +135,20 @@ func (e *Env) Lookup(name string) (string, Source, bool) {
 		}
 	}
 	return "", Source{}, false
+}
+
+// Secret returns a non-empty secret variable (an API key) and its source.
+// The process environment wins over the env file.
+func (e *Env) Secret(name string) (secure.Secret, Source, bool) {
+	if v, ok := e.lookup(name); ok && strings.TrimSpace(v) != "" {
+		return secure.NewSecret(strings.TrimSpace(v)), Source{Kind: SourceEnv, Name: name}, true
+	}
+	if e.file != nil {
+		if s, ok := e.file.Secrets[name]; ok && !s.IsZero() {
+			return s, Source{Kind: SourceEnvFile, Name: name, Path: e.file.Path}, true
+		}
+	}
+	return secure.Secret{}, Source{}, false
 }
 
 // Flags are the auth-mode command-line flags ("" = not given).
@@ -321,7 +340,7 @@ type KeyStatus struct {
 // KeyStore looks up secrets outside the environment (OS keychain).
 // Phase 1 ships no implementation; Lookup returns false.
 type KeyStore interface {
-	Lookup(name string) (string, bool)
+	Lookup(name string) (secure.Secret, bool)
 }
 
 // CheckKeys lists the API keys required by the resolution: one per agent in
@@ -341,10 +360,10 @@ func CheckKeys(res *Resolution, env *Env, ks KeyStore) []KeyStatus {
 			continue
 		}
 		st := KeyStatus{Agent: a, Var: KeyVar(a), Reason: reason}
-		if _, src, ok := env.Lookup(st.Var); ok {
+		if _, src, ok := env.Secret(st.Var); ok {
 			st.Present, st.Source = true, src
 		} else if ks != nil {
-			if v, ok := ks.Lookup(st.Var); ok && v != "" {
+			if v, ok := ks.Lookup(st.Var); ok && !v.IsZero() {
 				st.Present, st.Source = true, Source{Kind: SourceKeychain, Name: st.Var}
 			}
 		}

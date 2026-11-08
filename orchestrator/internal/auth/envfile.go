@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/0xyu/aco/internal/secure"
 )
 
 // EnvFileError is a syntax error in an env file. It never contains the
@@ -24,13 +26,42 @@ func (e *EnvFileError) Error() string {
 	return fmt.Sprintf("%s:%d: invalid env file line (expected KEY=VALUE)", e.Path, e.Line)
 }
 
-// EnvFile is a parsed env file.
+// EnvFile is a parsed env file. Variables whose names mark them as secret
+// (secure.IsSecretVar: API keys, tokens, passwords) are held only as
+// secure.Secret in Secrets; everything else is in Values.
 type EnvFile struct {
-	Path   string
-	Found  bool
-	Values map[string]string
+	Path    string
+	Found   bool
+	Values  map[string]string
+	Secrets map[string]secure.Secret
 	// LoosePerms is true on Unix when group/others can read the file.
 	LoosePerms bool
+}
+
+// NewEnvFile builds an EnvFile from parsed variables, moving secret ones
+// into Secrets.
+func NewEnvFile(path string, vars map[string]string) *EnvFile {
+	ef := &EnvFile{Path: path, Values: map[string]string{}, Secrets: map[string]secure.Secret{}}
+	for k, v := range vars {
+		if secure.IsSecretVar(k) {
+			ef.Secrets[k] = secure.NewSecret(v)
+		} else {
+			ef.Values[k] = v
+		}
+	}
+	return ef
+}
+
+// AllSecrets returns every secret in the file (for the output redactor).
+func (ef *EnvFile) AllSecrets() []secure.Secret {
+	if ef == nil {
+		return nil
+	}
+	out := make([]secure.Secret, 0, len(ef.Secrets))
+	for _, s := range ef.Secrets {
+		out = append(out, s)
+	}
+	return out
 }
 
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -49,7 +80,7 @@ func ExpandHome(path, home string) string {
 // LoadEnvFile reads and parses path. A missing file is an error only when
 // mustExist is true (an explicit --env-file); otherwise Found is false.
 func LoadEnvFile(path string, mustExist bool) (*EnvFile, error) {
-	ef := &EnvFile{Path: path, Values: map[string]string{}}
+	ef := NewEnvFile(path, nil)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) && !mustExist {
@@ -63,18 +94,19 @@ func LoadEnvFile(path string, mustExist bool) (*EnvFile, error) {
 			ef.LoosePerms = true
 		}
 	}
-	vals, err := ParseEnv(data, path)
+	vals, err := parseEnv(data, path)
 	if err != nil {
 		return nil, err
 	}
-	ef.Values = vals
-	return ef, nil
+	parsed := NewEnvFile(path, vals)
+	parsed.Found, parsed.LoosePerms = true, ef.LoosePerms
+	return parsed, nil
 }
 
-// ParseEnv parses dotenv syntax: KEY=VALUE lines, "#" comments, optional
+// parseEnv parses dotenv syntax: KEY=VALUE lines, "#" comments, optional
 // "export " prefix, single quotes (literal), double quotes (\n \t \" \\ escapes),
 // and inline " #" comments after unquoted values.
-func ParseEnv(data []byte, path string) (map[string]string, error) {
+func parseEnv(data []byte, path string) (map[string]string, error) {
 	out := map[string]string{}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	sc := bufio.NewScanner(bytes.NewReader(data))

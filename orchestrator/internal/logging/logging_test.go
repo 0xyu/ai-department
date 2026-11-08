@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0xyu/aco/internal/redact"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 const fakeAnthropic = "sk-ant-api03-FAKEFAKEFAKEFAKEFAKE1234567890"
@@ -26,14 +26,14 @@ func TestRedactsFakeAnthropicKey(t *testing.T) {
 		if strings.Contains(out, "FAKEFAKE") {
 			t.Fatalf("secret leaked (json=%v):\n%s", jsonOut, out)
 		}
-		if strings.Count(out, redact.Mask) < 5 {
+		if strings.Count(out, secure.Mask) < 5 {
 			t.Errorf("expected 5 masks (json=%v):\n%s", jsonOut, out)
 		}
 	}
 }
 
 func TestRedactsKnownEnvValues(t *testing.T) {
-	r := redact.New()
+	r := secure.NewRedactor()
 	r.AddFromEnv(map[string]string{
 		"OPENAI_API_KEY":   "plain-looking-secret-value",
 		"MY_SERVICE_TOKEN": "another-secret-value",
@@ -51,7 +51,7 @@ func TestRedactsKnownEnvValues(t *testing.T) {
 }
 
 func TestPatterns(t *testing.T) {
-	r := redact.New()
+	r := secure.NewRedactor()
 	for _, s := range []string{
 		"sk-ant-abcdefgh12345678",
 		"sk-proj-abcdefghijklmnop1234",
@@ -59,7 +59,7 @@ func TestPatterns(t *testing.T) {
 		"github_pat_11ABCDEFGHIJKLMNOPQRSTUV",
 		"AKIAABCDEFGHIJKLMNOP",
 	} {
-		if got := r.String("x " + s + " y"); got != "x "+redact.Mask+" y" {
+		if got := r.String("x " + s + " y"); got != "x "+secure.Mask+" y" {
 			t.Errorf("%s -> %s", s, got)
 		}
 	}

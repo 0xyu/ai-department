@@ -21,7 +21,7 @@ import (
 	"github.com/0xyu/aco/internal/exitcode"
 	"github.com/0xyu/aco/internal/i18n"
 	"github.com/0xyu/aco/internal/logging"
-	"github.com/0xyu/aco/internal/redact"
+	"github.com/0xyu/aco/internal/secure"
 )
 
 // System is the process environment the CLI runs in (injectable for tests).
@@ -94,7 +94,7 @@ type invocation struct {
 	out        *i18n.Printer
 	errOut     *i18n.Printer
 	log        *slog.Logger
-	redactor   *redact.Redactor
+	redactor   *secure.Redactor
 	loaded     *config.Loaded
 	loadErr    error
 	badFlag    badValue // set when a typed flag value failed to parse
@@ -128,7 +128,7 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 // Run executes the CLI and returns the process exit code.
 func Run(ctx context.Context, args []string, sys System) int {
-	red := redact.New()
+	red := secure.NewRedactor()
 	red.AddFromEnv(sys.envMap())
 	logger := newLogger(sys, red)
 
@@ -160,7 +160,7 @@ func Run(ctx context.Context, args []string, sys System) int {
 	c := findCommand(args[0])
 	if c == nil {
 		p := newPrinter(sys.Stderr, rootLang(sys), red)
-		p.Say(i18n.CLIUnknownCommand, args[0])
+		p.Say(i18n.CLIUnknownCommand, red.Echo(args[0]))
 		p.Blank()
 		printRootHelp(p)
 		return exitcode.Usage
@@ -189,7 +189,7 @@ func Run(ctx context.Context, args []string, sys System) int {
 		return exitcode.Completed
 	}
 	if perr != nil {
-		renderFlagError(inv.errOut, perr, inv.badFlag)
+		renderFlagError(inv.errOut, red, perr, inv.badFlag)
 		inv.errOut.Say(i18n.CLIErrHelpHint, c.name)
 		return exitcode.Usage
 	}
@@ -201,7 +201,7 @@ func Run(ctx context.Context, args []string, sys System) int {
 	return c.run(inv)
 }
 
-func newLogger(sys System, red *redact.Redactor) *slog.Logger {
+func newLogger(sys System, red *secure.Redactor) *slog.Logger {
 	var level, format string
 	if sys.LookupEnv != nil {
 		level, _ = sys.LookupEnv("ACO_LOG_LEVEL")
@@ -214,7 +214,7 @@ func newLogger(sys System, red *redact.Redactor) *slog.Logger {
 	})
 }
 
-func newInvocation(ctx context.Context, sys System, c *command, log *slog.Logger, red *redact.Redactor) *invocation {
+func newInvocation(ctx context.Context, sys System, c *command, log *slog.Logger, red *secure.Redactor) *invocation {
 	fs := flag.NewFlagSet(c.name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
@@ -246,7 +246,7 @@ func newInvocation(ctx context.Context, sys System, c *command, log *slog.Logger
 
 // newPrinter returns a printer whose output is masked by red, so no CLI
 // message (config errors, flag errors, echoed arguments) can print a secret.
-func newPrinter(w io.Writer, lang i18n.Lang, red *redact.Redactor) *i18n.Printer {
+func newPrinter(w io.Writer, lang i18n.Lang, red *secure.Redactor) *i18n.Printer {
 	return i18n.NewPrinter(w, lang).SetFilter(red.String)
 }
 
@@ -346,13 +346,7 @@ func (inv *invocation) loadEnvAndAuth(cfg *config.Config) (*auth.Env, *auth.Reso
 			renderEnvFileError(inv.errOut, path, err)
 			return nil, nil, false
 		}
-		vals := make([]string, 0, len(ef.Values))
-		for k, v := range ef.Values {
-			if redact.IsSecretVar(k) {
-				vals = append(vals, v)
-			}
-		}
-		inv.redactor.Add(vals...)
+		inv.redactor.AddSecret(ef.AllSecrets()...)
 	}
 	env := auth.NewEnv(inv.sys.LookupEnv, ef)
 	res, err := auth.Resolve(auth.Flags{
@@ -361,7 +355,7 @@ func (inv *invocation) loadEnvAndAuth(cfg *config.Config) (*auth.Env, *auth.Reso
 		CodexAuthMode:  inv.str("codex-auth-mode"),
 	}, env, cfg.Auth, inv.loaded.Origin)
 	if err != nil {
-		renderAuthError(inv.errOut, err)
+		renderAuthError(inv.errOut, inv.redactor, err)
 		return nil, nil, false
 	}
 	return env, res, true
@@ -369,7 +363,7 @@ func (inv *invocation) loadEnvAndAuth(cfg *config.Config) (*auth.Env, *auth.Reso
 
 func runVersion(inv *invocation) int {
 	if len(inv.positional) > 0 {
-		inv.errOut.Say(i18n.CLIErrUnexpectedArgs, strings.Join(inv.positional, " "))
+		inv.errOut.Say(i18n.CLIErrUnexpectedArgs, echoArgs(inv.redactor, inv.positional))
 		return exitcode.Usage
 	}
 	v, c, d := buildinfo.Info()
@@ -379,11 +373,11 @@ func runVersion(inv *invocation) int {
 
 func runDoctor(inv *invocation) int {
 	if len(inv.positional) > 0 {
-		inv.errOut.Say(i18n.CLIErrUnexpectedArgs, strings.Join(inv.positional, " "))
+		inv.errOut.Say(i18n.CLIErrUnexpectedArgs, echoArgs(inv.redactor, inv.positional))
 		return exitcode.Usage
 	}
 	if inv.loadErr != nil {
-		renderConfigError(inv.errOut, inv.loadErr)
+		renderConfigError(inv.errOut, inv.redactor, inv.loadErr)
 		return exitcode.Usage
 	}
 	cfg := inv.loaded.Config
@@ -427,4 +421,14 @@ func runDoctor(inv *invocation) int {
 	}
 	p.Say(i18n.DoctorSummaryOK, warns)
 	return exitcode.Completed
+}
+
+// echoArgs lists rejected positional arguments for a diagnostic, hiding any
+// that might be credentials.
+func echoArgs(red *secure.Redactor, args []string) string {
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = red.Echo(a)
+	}
+	return strings.Join(out, " ")
 }

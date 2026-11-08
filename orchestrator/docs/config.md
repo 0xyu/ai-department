@@ -19,9 +19,12 @@ Lists are replaced, not merged. Maps (`pricing.codex`) are merged by key. A `nul
 Each config file (and the plan front matter, and each `--set` value) must hold exactly one YAML document. A second
 document (`---` followed by more YAML) is a `parse` error with its line.
 
-Errors from `--set` name the option and key path (`--set auth.mode`), never the value. A malformed `--set` is named
-by its position (`--set #2`), since the whole argument might be a credential. All CLI output is also passed through
-the same secret masking as logs.
+Errors from `--set` name the option and key path (`--set auth.mode`), never the value. A malformed `--set`, or one
+whose key is not a known schema path (an unknown field or a map key such as a `pricing.codex` model), is named by its
+position (`--set #2`), since the key itself might be a credential. Unknown keys in field paths show as `[hidden]`
+(`planner.[hidden]`), with the file and line. Rejected values in other errors are
+repeated only when short and plain (`subscriptoin`, `extreme`); anything else shows as `[hidden]`. See
+[security.md](security.md).
 
 ## Validation
 
@@ -181,14 +184,9 @@ are rejected with `secret_field`.
 
 ## Logging
 
-Logs go to stderr in English and are redacted before they are written: values of secret environment variables
-(`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `CODEX_API_KEY`, `ACO_API_TOKEN`, `GITHUB_TOKEN`, … and any variable ending in
-`_KEY`, `_TOKEN`, `_SECRET`, `PASSWORD`), including those from the env file, and the patterns `sk-ant-…`, `sk-…`,
-`ghp_…`/`gho_…`/…, `github_pat_…`, `AKIA…`. Masking covers the message, attribute keys and values, group names,
-and the exact text each structured value is written as. Each value is converted once, the way the log format would
-convert it (`Error()` or JSON for JSON logs, `MarshalText` or `%+v` for text logs), and the masked result is what gets
-written. Byte slices are masked before JSON's Base64 encoding. If a custom conversion panics, the value is written as
-`!PANIC: log value conversion failed` (never the panic payload) and the rest of the record is logged.
+Logs go to stderr in English. Messages, keys, group names, and string values are masked (secret environment
+variables, including those from the env file, and credential patterns), and only allowlisted value types are written;
+anything else appears as `[UNLOGGABLE <type>]`. See [security.md](security.md) for the full rules.
 
 | Variable | Values | Default |
 |---|---|---|
