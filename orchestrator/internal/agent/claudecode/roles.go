@@ -67,14 +67,39 @@ func (p plannerRole) Create(ctx context.Context, req agent.PlanRequest) (*agent.
 	if err != nil {
 		return nil, err
 	}
+	// A supplied plan revised before any session existed answers its
+	// findings in the same call (revision schema).
+	revision := len(req.Findings) > 0
+	schema := schemas.Plan
+	if revision {
+		schema = RevisionSchema()
+	}
 	r, err := a.run(ctx, call{
 		profile: ProfilePlanner, sessionID: newUUID(), model: a.opts.PlannerModel, effort: a.opts.PlannerEffort,
-		system: sys, prompt: text, schema: schemas.Plan, ws: req.Workspace, out: req.Output, runID: req.RunID, scopes: req.BudgetScopes,
+		system: sys, prompt: text, schema: schema, ws: req.Workspace, out: req.Output, runID: req.RunID, scopes: req.BudgetScopes,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return a.planResult(r, false)
+	res, err := a.planResult(r, revision)
+	if err != nil || !revision {
+		return res, err
+	}
+	if missing := missingResponses(req.Findings, res.Responses); len(missing) > 0 {
+		return res, a.fail(res.Invocation, agent.ClassIncomplete, "finding_responses has no answer for "+strings.Join(missing, ", "), nil)
+	}
+	return res, nil
+}
+
+// missingResponses lists the findings without an answer.
+func missingResponses(fs []agent.PlanFinding, rs []agent.FindingResponse) []string {
+	var missing []string
+	for _, f := range fs {
+		if !slices.ContainsFunc(rs, func(fr agent.FindingResponse) bool { return fr.ID == f.ID }) {
+			missing = append(missing, f.ID)
+		}
+	}
+	return missing
 }
 
 func (p plannerRole) Revise(ctx context.Context, req agent.PlanRevision) (*agent.PlanResult, error) {
@@ -101,13 +126,7 @@ func (p plannerRole) Revise(ctx context.Context, req agent.PlanRevision) (*agent
 	if err != nil {
 		return nil, err
 	}
-	var missing []string
-	for _, f := range req.Findings {
-		if !slices.ContainsFunc(res.Responses, func(fr agent.FindingResponse) bool { return fr.ID == f.ID }) {
-			missing = append(missing, f.ID)
-		}
-	}
-	if len(missing) > 0 {
+	if missing := missingResponses(req.Findings, res.Responses); len(missing) > 0 {
 		return res, a.fail(res.Invocation, agent.ClassIncomplete, "finding_responses has no answer for "+strings.Join(missing, ", "), nil)
 	}
 	return res, nil

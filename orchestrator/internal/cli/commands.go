@@ -80,7 +80,7 @@ func commands() []*command {
 		{name: "run", summary: i18n.CmdRunSummary,
 			flags: flagsOf([]string{"repo", "requirements", "plan", "base", "detach"}, configFlags[1:], authFlags)},
 		{name: "plan", summary: i18n.CmdPlanSummary,
-			flags: flagsOf([]string{"repo", "requirements", "base"}, configFlags[1:], authFlags)},
+			flags: flagsOf([]string{"repo", "requirements", "plan", "base"}, configFlags[1:], authFlags), run: runPlan},
 		{name: "resume", summary: i18n.CmdResumeSummary, args: i18n.CmdArgsRunID,
 			flags: flagsOf([]string{"retry", "from-phase", "revise-plan"}, configFlags, authFlags)},
 		{name: "status", summary: i18n.CmdStatusSummary, args: i18n.CmdArgsOptionalRunID,

@@ -192,6 +192,24 @@ const (
 	// Generic.
 	CLIRawLine Key = "cli.raw_line"
 
+	// plan (Stages 1–2).
+	PlanErrNeedInput   Key = "plan.err.need_input"
+	PlanErrReadInput   Key = "plan.err.read_input"
+	PlanErrLocked      Key = "plan.err.locked"
+	PlanErrPreflight   Key = "plan.err.preflight"
+	PlanErrSystem      Key = "plan.err.system"
+	PlanStarted        Key = "plan.started"
+	PlanFrozenLine     Key = "plan.frozen"
+	PlanHashLine       Key = "plan.hash"
+	PlanBlockedLine    Key = "plan.blocked"
+	PlanFailedLine     Key = "plan.failed"
+	PlanPausedLine     Key = "plan.paused"
+	PlanCancelledLine  Key = "plan.cancelled"
+	PlanArtifactsLine  Key = "plan.artifacts"
+	PlanWorktreeLine   Key = "plan.worktree"
+	PlanOpenFindingRow Key = "plan.open_finding_row"
+	PlanGateReasonRow  Key = "plan.gate_reason_row"
+
 	// validate-plan.
 	ValidatePlanNeedPath     Key = "validate_plan.err.need_path"
 	ValidatePlanNotFound     Key = "validate_plan.err.not_found"

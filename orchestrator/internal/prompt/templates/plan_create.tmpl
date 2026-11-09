@@ -22,6 +22,14 @@ The user supplied an existing plan. Convert it into the plan package format, kee
 
 ## Quality gates ACO can run for this repository
 {{data "gate_catalogue" .GateCatalogue}}
+{{if or .Findings .CheckResults}}
+## Problems found in the supplied plan
 
+The supplied plan was checked{{if .Findings}} and reviewed{{end}} before this conversion. Fix every problem below in the package you return.{{if .Findings}} Answer each finding in finding_responses with its ID and either "fixed" (what you changed) or "disputed" (your reasoning and evidence).{{end}}
+{{range .Findings}}{{data (printf "finding %s" .ID) (printf "id: %s\nseverity: %s\ndimension: %s\nlocation: %s\ntitle: %s\ndescription: %s\nrequired_change: %s" .ID .Severity .Dimension .Location .Title .Description .RequiredChange)}}
+{{end}}{{if .CheckResults}}
+### Deterministic plan checks
+{{data "plan_checks" .CheckResults}}
+{{end}}{{end}}
 Return the complete plan package as the structured output.
 {{end}}

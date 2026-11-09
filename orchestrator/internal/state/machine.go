@@ -66,12 +66,13 @@ var statusOf = map[Stage]RunStatus{
 func StageOf(s RunStatus) Stage { return stageOf[s] }
 
 // runEdges is the transition table. Paused resumes only to the status it
-// paused from (checked in CheckRunTransition).
+// paused from (checked in CheckRunTransition). Plan review → completed ends
+// a plan-only run (aco plan) after the freeze.
 var runEdges = map[RunStatus][]RunStatus{
 	RunCreated:           {RunPreflight, RunFailed, RunCancelled},
 	RunPreflight:         {RunPlanning, RunPlanReview, RunFailed, RunCancelled},
 	RunPlanning:          {RunPlanReview, RunPaused, RunBlocked, RunFailed, RunCancelled},
-	RunPlanReview:        {RunPlanning, RunExecuting, RunPaused, RunBlocked, RunFailed, RunCancelled},
+	RunPlanReview:        {RunPlanning, RunExecuting, RunCompleted, RunPaused, RunBlocked, RunFailed, RunCancelled},
 	RunExecuting:         {RunFinalVerification, RunPaused, RunBlocked, RunFailed, RunCancelled},
 	RunFinalVerification: {RunCompleted, RunPaused, RunBlocked, RunFailed, RunCancelled},
 	RunPaused:            {RunPlanning, RunPlanReview, RunExecuting, RunFinalVerification, RunFailed, RunCancelled},

@@ -56,6 +56,7 @@ type harness struct {
 	stdout bytes.Buffer
 	stderr bytes.Buffer
 	stdin  string
+	agents PlanAgents
 }
 
 func newHarness(t *testing.T) *harness {
@@ -105,6 +106,8 @@ func (h *harness) run(args ...string) int {
 			}
 			return auth.ParseCodexLoginStatus("Logged in using ChatGPT"), nil
 		},
+		Agents:   h.agents,
+		LookPath: func(string) (string, error) { return "", os.ErrNotExist },
 	}
 	return Run(context.Background(), args, sys)
 }
@@ -159,7 +162,7 @@ func TestHelpInEnglishWithUserConfigAndSet(t *testing.T) {
 
 func TestStubsExitTwoNotImplemented(t *testing.T) {
 	stubs := map[string][]string{
-		"run": nil, "plan": nil, "resume": {"r1"}, "status": nil, "pause": {"r1"}, "cancel": {"r1"},
+		"run": nil, "resume": {"r1"}, "status": nil, "pause": {"r1"}, "cancel": {"r1"},
 		"report": {"r1"}, "serve": nil, "mcp": nil,
 	}
 	for name, args := range stubs {

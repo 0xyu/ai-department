@@ -21,6 +21,7 @@ var legalRun = map[[2]RunStatus]bool{
 
 	{RunPlanReview, RunPlanning}: true, {RunPlanReview, RunExecuting}: true, {RunPlanReview, RunPaused}: true,
 	{RunPlanReview, RunBlocked}: true, {RunPlanReview, RunFailed}: true, {RunPlanReview, RunCancelled}: true,
+	{RunPlanReview, RunCompleted}: true, // plan-only run after freeze
 
 	{RunExecuting, RunFinalVerification}: true, {RunExecuting, RunPaused}: true, {RunExecuting, RunBlocked}: true,
 	{RunExecuting, RunFailed}: true, {RunExecuting, RunCancelled}: true,

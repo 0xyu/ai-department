@@ -11,7 +11,7 @@
 | Phase 5 | Claude Code 适配器 | 已完成（订阅模式实测通过；API 模式实测、三平台 CI 与 `-race` 尚未运行） |
 | Phase 6 | 质量门执行器 | 已完成（staticcheck/gosec/govulncheck 本次未运行；三平台 CI 与 `-race` 尚未运行） |
 | Phase 7 | 基于 Codex CLI 的 GPT 评审 | 已完成（订阅模式实测通过；API 模式实测、staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行） |
-| Phase 8 | 第 1、2 阶段流水线 | 未开始 |
+| Phase 8 | 第 1、2 阶段流水线 | 已完成（订阅模式实测通过；API 模式实测、staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行） |
 | Phase 9 | 第 3 阶段单阶段引擎 | 未开始 |
 | Phase 10 | 运行生命周期与恢复 | 未开始 |
 | Phase 11 | 第 4 阶段最终验证 | 未开始 |
@@ -224,6 +224,27 @@
 - 评审 JSON 先按内嵌 Schema 完整校验（嵌套必填字段、必填处不得为 null、类型、整数、枚举、未知字段；遇到未实现的 Schema 关键字时直接报错，避免静默跳过），再做与请求相关的语义检查。新增 `test_assessment: {}`、必填数组为 null 等测试，并验证这类输出进入现有的格式重试流程；结论矛盾但格式合规的评审仍交给决策门。
 - 转录写入错误：JSONL 超过产物大小上限（或写入失败）时立即停止调用并返回明确错误（`crash`），不保存不完整的 `transcript.jsonl`，改写 `transcript.incomplete.txt` 说明原因；错误中保留会话、用量、提示词等调用元数据。新增溢出回归测试。
 
+## Phase 8 完成内容
+
+详见 [docs/planning.md](docs/planning.md)。
+
+- `internal/engine`（新包）：第 1、2 阶段流水线 `RunPlanning`。
+  - 第 1 阶段：需求文档、仓库概览（语言、有上限的文件树、已有测试）、已有 AGENTS.md、计划格式指南（内嵌 `planformat.md`）和质量门目录（配置或自动检测的各类命令及可用扫描器）交给 Claude 规划器；规划器只返回结构化计划包，由编排器写文件。
+  - 每一版计划包都写入运行工作树的 `.aco/plan/`（替换旧版本），仓库没有 AGENTS.md 时一并写入规划器提议的 AGENTS.md；然后从磁盘读回，用与 `aco validate-plan` 相同的 `plan.ValidateFull` 检查，因此评审的文件就是最终冻结的文件。每一版及其检查报告保存在运行产物 `planning/package-NN/`。写入前拒绝作为链接或 junction 的 `.aco`、`.aco/plan`。
+  - 确定性检查不通过的计划包直接退回 Claude，不调用 GPT。
+  - 第 2 阶段：Codex 评审（需求、计划包全部文件原文、需求 ID、仓库概览、AGENTS.md、检查结果；复审时附上每个未关闭问题及 Claude 的回应）。
+  - 计划决策门 `DecidePlanGate` 是纯函数，带表驱动测试；只看细节，从不采用评审结论（verdict 只记录）。
+  - 计划问题台账：引擎分配 `PF-001…`，记录 resolved / dispute_accepted / dispute_rejected / reopened、重开和争议次数，每次变化都写入 `findings` 表并发出对应事件。
+  - 修订循环：失败时把未关闭问题和检查结果交给 Claude（第 1 阶段会话中 `Revise`；`--plan` 导入的计划尚无会话时，用一次 `Create` 同时转换并修订，并按修订 Schema 回答每个问题）。`agent.PlanRequest` 新增 `Findings`、`CheckResults`，`plan_create.tmpl` 相应扩展。
+  - 轮数上限：每次循环（GPT 评审或检查失败）都计入 `limits.plan_review_rounds`；用完时运行阻塞（最后一版通过检查为 `plan_review_rounds`，否则为 `plan_invalid`），不提交，最新计划包留在工作树，所有版本和评审在产物中，`reports/plan-blocked.md` 列出最后的决策门原因和未关闭问题。
+  - 冻结（§10.5）：写 `plan-review.md` 与 `plan.lock.json`；先检查改动路径只在 `.aco/plan/**` 和生成的 AGENTS.md 内（已有 AGENTS.md 绝不改动），再以 `RequireExact`、`ExpectedHead`=基础提交提交 `docs(aco): freeze implementation plan v1`（含四个 trailer），提交后再次校验锁；打 `aco/<run-id>/plan-v1` 标签、写 `git notes`（按配置）；记录计划哈希、`commits` 行、`git.commit`/`plan.frozen` 事件，并登记全部阶段（pending）。仅计划模式进入 completed，完整模式进入 executing。
+  - 错误处理：可重试的规划器错误最多重试 2 次；订阅额度用尽时暂停并记录 `resume_at`（重置时间 + 2 分钟，未知时 15 分钟）；auth / API 额度 / 预算失败；评审越权读取阻塞（`policy_violations`）；`limits.agent_calls` 用尽失败（达到软比例时发出 `usage.warning`）；取消即 cancelled。每次 agent 调用都记录到 `invocations` 表并发出 `agent.invocation.*` 事件。
+- 运行状态机新增 `plan_review → completed`（仅计划模式冻结后结束），已同步测试和 docs/lifecycle.md。
+- `internal/agent/claudecode`：`Create` 带 `Findings` 时使用修订 Schema 并要求回答每个问题。
+- `aco plan` 已实现：`--requirements` 或 `--plan`（可同时给出），计划前置元数据作为 plan 配置层；运行锁（心跳丢失即取消）、Git 预检、`~/.aco/worktrees/<run-id>` 工作树与运行分支、`~/.aco/state.db`、`~/.aco/runs/<run-id>` 产物；输出冻结结果或阻塞原因与未关闭问题。退出码：0 已冻结，1 失败/暂停/仓库被占用，2 用法，3 预检失败，4 取消，5 阻塞。新增 16 个 i18n 键。`cli.System` 新增 `Agents`、`LookPath` 注入点（测试用）。
+- 测试：决策门表驱动测试与台账测试；伪造规划器/评审器 + 真实 Git 与状态库的场景测试，覆盖 AC-08.1（首轮通过并冻结，提交只含计划包和生成的 AGENTS.md，标签、trailer、锁哈希一致）、AC-08.2（未覆盖需求 + 前向依赖 → 修订 → 第 2 轮冻结）、AC-08.3（持续失败 → 在 plan_review 阻塞，无冻结提交，最新计划包和评审已保存）、AC-08.4（`--plan` Markdown 计划跳过第 1 阶段）、导入计划的转换式修订、检查失败不调用 GPT、`plan_invalid`、各类 agent 错误、重试、评审越权与格式失败、调用上限、取消、被链接的 `.aco`（Windows 上用 junction 实测）。`-tags=integration` 端到端测试（完整模式，经过检查失败、评审失败、争议和复审通过；冻结后的计划包通过 validate-plan 检查且锁已验证；用户检出逐字节不变）。`-tags=live`（`ACO_LIVE_PLAN=1`）真实 Claude + Codex（AC-08.5）。CLI 端到端测试。
+- 本机已运行：`gofmt`、`go vet`（默认、integration、live 标签）、全部单元测试、全部 integration 测试、`CGO_ENABLED=0 go build`。订阅模式 live 测试通过（约 4 分钟）：真实 Claude 生成 2 个阶段的计划，GPT 第 1 轮提出 1 个 major 问题（lint 命令在 Windows 的 shell 中无法运行），Claude 修订后第 2 轮通过并冻结；另一次运行第 1 轮即通过。staticcheck、gosec、govulncheck 本机未安装，本次未运行。
+
 ## 已知事项
 
 - Phase 2 时本机无法下载 staticcheck；Phase 3 时已可下载并运行，整个代码库无问题。三平台 CI 仍需在 GitHub 上验证。符号链接相关测试在 Windows 上用 junction，在 Linux/macOS 上用符号链接，后者尚未在本机运行。
@@ -234,4 +255,5 @@
 - Phase 5：API 模式的 live 测试本机没有 `ANTHROPIC_API_KEY`，未运行（`ACO_LIVE_AUTH_MODE=api` 可运行）；Linux/macOS 上的进程组终止只做了交叉编译检查，尚未实际运行。
 - guard 是策略检查，不是沙箱：允许运行的程序（测试、构建脚本）仍可做其操作系统用户能做的一切；隔离边界是 Phase 12 的容器模式。
 - `--max-turns` 在 2.1.311 的 `--help` 中不显示，按 2.x 版本默认支持；不支持时由 ACO 按轮数兜底终止。
+- Phase 8：订阅额度暂停后的自动恢复、`aco resume`（含 `--revise-plan` 产生 plan-v2）由 Phase 10 实现；暂停时 `aco plan` 以退出码 1 结束。规划阶段的 agent 调用上限按单次运行计数（不跨进程恢复）。`--plan` 导入且仓库没有 AGENTS.md 时，只有在规划器参与修订并提议时才会生成 AGENTS.md。
 - Phase 6：Windows 上质量门命令需要 Git for Windows 的 sh；集成测试依赖的服务地址等只能通过固定的非密钥 `ExtraEnv` 传入，配置中暂无对应字段。Stage 4 的密钥全量扫描应与运行基础提交上的全项目模式基线比较（Phase 11 负责生成）。Node 和 Python 夹具只做了检测测试，未用真实工具链执行。

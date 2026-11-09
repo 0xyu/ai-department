@@ -32,6 +32,7 @@ stateDiagram-v2
     Planning --> PlanReview
     PlanReview --> Planning: plan gate FAIL (revise)
     PlanReview --> Executing: plan gate PASS, freeze
+    PlanReview --> Completed: plan-only run (aco plan), after freeze
     Executing --> FinalVerification: all phases committed
     FinalVerification --> Completed: final gate PASS
     Planning --> Blocked
@@ -72,6 +73,7 @@ already require:
 - **Failed from every active status**: an auth, quota, budget, environment, or internal error can happen in any stage
   (§14.1), and a paused run fails when `limits.max_pause` is exceeded.
 - **Cancelled from every non-terminal status** (`aco cancel` works at any time).
+- **Plan review → Completed** ends a plan-only run (`aco plan`, mode `plan_only`) after the freeze (Phase 8).
 - **Paused resumes only to the status it paused from** (`paused_from` is stored).
 - **Resume from Blocked or Failed** is a separate operation (`ResumeRun`, used by `aco resume` in Phase 10), not a
   normal transition. The default target is the stage in the stored reason; any stage or preflight may be chosen

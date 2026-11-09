@@ -358,6 +358,15 @@ On PASS:
 
 `aco plan …` runs only Stages 1–2 and stops after freeze (useful for inspecting plans before execution).
 
+As built in Phase 8 (details in `docs/planning.md`): every pass through the revision loop — a GPT review or a package
+that fails the deterministic checks (no GPT call) — counts against `limits.plan_review_rounds`; when they are used up
+the run is blocked with `plan_review_rounds`, or `plan_invalid` if the last package still failed the checks. The
+package is written to the run worktree and read back before every check, so the reviewed files are exactly the frozen
+ones; `.aco/plan/plan-review.md` is written at the freeze and covered by the lock. A supplied plan (`--plan`) that
+needs revision before any planning session exists is converted and fixed by one planner `Create` call that also
+answers the findings. A plan-only run moves `plan_review → completed` after the freeze (a transition added to the run
+state machine); a full run moves to `executing`, and in both cases the frozen phases are registered as `pending`.
+
 ## 11. Stage 3 — Phase Execution Loop
 
 ### 11.1 Roles

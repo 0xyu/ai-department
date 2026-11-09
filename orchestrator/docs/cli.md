@@ -20,7 +20,7 @@ A bad value for an integer or boolean flag is reported by flag name and expected
 | Command | Status (Phase 1) | Flags |
 |---|---|---|
 | `run` | stub | `--repo --requirements --plan --base --detach --config --set --env-file --auth-mode --claude-auth-mode --codex-auth-mode` |
-| `plan` | stub | `--repo --requirements --base --config --set --env-file` + auth flags |
+| `plan` | **implemented** (Phase 8) | `--repo --requirements --plan --base --config --set --env-file` + auth flags |
 | `resume <run-id>` | stub | `--retry --from-phase N --revise-plan` + config and auth flags |
 | `status [<run-id>]` | stub | `--follow --json` |
 | `pause <run-id>` | stub | |
@@ -71,6 +71,14 @@ Exit code: 0 when nothing failed (warnings allowed), 3 when any check failed, 2 
 Version probes run with secret environment variables removed and `GIT_TERMINAL_PROMPT=0`. `--probe` makes one small
 real Claude call and one small real Codex call (they use a little subscription quota or API budget; in api mode the
 Codex probe also logs the dedicated `CODEX_HOME` in); without it model availability is not checked.
+
+## `aco plan`
+
+Runs Stages 1–2 only and stops after the freeze: `--requirements <file>` starts with Stage 1 (Claude writes the plan);
+`--plan <file|dir>` imports an existing plan and starts with Stage 2 (`--requirements` may be given too, otherwise the
+plan's own requirements are used). The plan's front matter is applied as the plan config layer. The run gets its own
+worktree and branch; the user's checkout is not touched. Exit codes: 0 frozen, 1 failed / paused / repository locked,
+2 usage, 3 preflight failed, 4 cancelled, 5 blocked. See [planning.md](planning.md).
 
 ## `aco hook pre-tool-use` (internal)
 

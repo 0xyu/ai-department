@@ -152,7 +152,13 @@ type PlanRequest struct {
 	AgentsMD        string // existing AGENTS.md ("" = none: the planner proposes one)
 	PlanFormatGuide string
 	GateCatalogue   string
-	BudgetScopes    []Scope
+	// Findings and CheckResults are set when a supplied plan (--plan) failed
+	// the checks or the review before any planning session existed: the
+	// planner converts and revises it in one call and answers each finding
+	// in Responses.
+	Findings     []PlanFinding
+	CheckResults string
+	BudgetScopes []Scope
 }
 
 // PlanRevision resumes the planning session with review results.

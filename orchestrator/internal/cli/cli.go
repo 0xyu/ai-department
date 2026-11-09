@@ -37,6 +37,11 @@ type System struct {
 	Keychain  auth.KeyStore // nil: no keychain support yet
 	// CodexStatus replaces `codex login status` (tests); nil runs the CLI.
 	CodexStatus func(ctx context.Context, mode auth.Mode) (auth.CodexStatus, error)
+	// Agents builds the planner and the reviewer (tests); nil uses Claude
+	// Code and Codex CLI.
+	Agents PlanAgents
+	// LookPath finds programs for gate detection; nil uses exec.LookPath.
+	LookPath func(string) (string, error)
 }
 
 // OSSystem returns the real process environment.
