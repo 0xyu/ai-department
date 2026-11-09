@@ -214,9 +214,29 @@ func (r *Runner) RunGate(ctx context.Context, s Spec, mode Mode) (*Result, error
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
+	// observe records the first tree seen that is not the gate's tree, at
+	// every command boundary: a command that changes the tree and a later
+	// one that restores it still leave TreeAfter set, so the gate's
+	// evidence is never taken as evidence for one tree.
+	observe := func() error {
+		if res.TreeAfter != "" || r.opts.Repo == nil {
+			return nil
+		}
+		after, err := r.treeHash(ctx)
+		if err != nil {
+			return err
+		}
+		if after != tree {
+			res.TreeAfter = after
+		}
+		return nil
+	}
 	for i, c := range s.Commands {
 		cr, parsed, err := r.runCommand(ctx, s.Type, i, c, timeout)
 		if err != nil {
+			return nil, err
+		}
+		if err := observe(); err != nil {
 			return nil, err
 		}
 		res.Commands = append(res.Commands, cr)
@@ -237,8 +257,8 @@ func (r *Runner) RunGate(ctx context.Context, s Spec, mode Mode) (*Result, error
 			res.Commands = append(res.Commands, *cr)
 		}
 	}
-	if after, err := r.treeHash(ctx); err == nil && after != tree {
-		res.TreeAfter = after
+	if err := observe(); err != nil {
+		return nil, err
 	}
 	res.Duration = r.opts.Now().Sub(start)
 	return res, nil

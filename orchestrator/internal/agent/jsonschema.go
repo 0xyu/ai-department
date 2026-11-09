@@ -179,6 +179,17 @@ func reviewSchemas() (*schemaNode, *schemaNode, error) {
 	return planReviewSchema, codeReviewSc, reviewSchemaErr
 }
 
+// ValidateSchema checks the JSON document raw against schema (restricted to
+// the keywords listed above). It returns every violation; an error means
+// the schema itself is not supported.
+func ValidateSchema(schema, raw []byte) ([]string, error) {
+	n, err := compileSchema(schema, "$schema")
+	if err != nil {
+		return nil, err
+	}
+	return validateJSON(n, raw), nil
+}
+
 // validateJSON checks raw against a compiled schema. The answer must be a
 // single JSON value.
 func validateJSON(n *schemaNode, raw []byte) []string {

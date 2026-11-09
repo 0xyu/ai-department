@@ -565,6 +565,32 @@ Then:
 
 The engine moves to the next phase in the frozen order and starts §11.3 again: **new Claude session**, latest state loaded from Git (`HEAD`, frozen plan, AGENTS.md, all Phase Completion Reports). No transcript or session is reused across phases. The loop repeats until every phase is committed, then Stage 4 starts.
 
+As built in Phase 9 (details in `docs/phase-loop.md`): a reviewer `dispute_accepted` on a finding Claude answered
+`cannot_fix_within_spec` / `cannot_fix_safely` is the reviewer's confirmation, so triage blocks with `spec_conflict` /
+`unsafe`. Triage runs on every review (so minor, out-of-scope, and downgraded findings are deferred before the gate
+decides); `triage.completed` is emitted on FAIL. Gate reasons that are not findings (AC not met, plan deviation, high
+regression risk) are sent to Claude as work items. "Covered by a passing test cited in evidence" for a high regression
+risk is checked per item: `regression_assessment.items` lists each risk with its level and covering tests, and every
+high-risk item must cite at least one test that resolves by exact identity (`package.TestName`, or a bare name that
+identifies one test) to results that all passed in the accepted gate round; missing, ambiguous, skipped, or failing
+citations keep the gate red, and free-text notes are not evidence. A reviewer-proposed `deferred` never clears an
+in-scope blocker or major (security included); only out-of-scope, minor/nit, and downgraded findings are deferred, and
+an open `unsafe` / `spec_conflict` / `environment` finding fails the review gate at any severity. Gate evidence counts
+only when every result of the round is for one tree and the tree did not move during the round (checked after every
+command of a gate); a stale round is rerun on the new candidate (counted as a gate-fix attempt). The initial baseline
+round is saved only when it is such evidence for the clean base tree; otherwise it is retried (at most 3 runs) and the
+phase blocks with `init_check_failed` before the implementer is called. A finding that reappears with the fingerprint
+of an existing one keeps its ID and history but is triaged at its current severity and proposed class, so an earlier
+deferral or downgrade never hides a finding that blocks now. The phase commit is bound to the exact generated report
+bytes and mode and to the phase's validated base as its parent. If the worktree drifts after the Commit Gate and the Git
+helper refuses to stage it, the report files of that try are discarded (only those that still hold what it wrote) and the phase goes back through gates and an
+independent review (counted as a review round). The no-progress
+guard counts fix rounds that leave the tree unchanged (rounds with disputes excepted; an accepted dispute resets it).
+Phase usage limits (`agent_calls.phase`, `claude_turns.phase`, `phase_timeout`) apply per attempt and are checked
+before each agent call; the run-level limits fail the run. When the Commit Gate sends the phase back to review, the
+gates run again first (they must be for the reviewed tree). A gate that ACO could not run (`error`) blocks like an
+environment failure. The Phase Completion Report also lists regressions seen during the phase (fixed before review).
+
 ## 12. Stage 4 — Final Verification
 
 Runs on the final `HEAD` of the run branch in a **fresh clean checkout** (new worktree at `HEAD`, so no leftover build artifacts or untracked files can hide problems).

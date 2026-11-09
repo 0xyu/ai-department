@@ -267,3 +267,54 @@ func TestCompileSchemaRejectsUnsupportedKeywords(t *testing.T) {
 		}
 	}
 }
+
+// regression_assessment.items: the per-item evidence of §11.7.
+func TestParseCodeReviewRegressionItems(t *testing.T) {
+	ac, prev := []string{"AC-01.1"}, []string{"F-01-001"}
+	with := func(items string) string {
+		return strings.Replace(goodCode, `"regression_assessment":{"risk":"low","notes":""}`,
+			`"regression_assessment":{"risk":"high","notes":"n","items":`+items+`}`, 1)
+	}
+	r, probs := ParseCodeReview([]byte(with(`[{"risk":"high","description":"FindUser signature","tests":["example.com/store.TestFindUser"]},{"risk":"low","description":"docs","tests":[]}]`)), ac, prev)
+	if r == nil {
+		t.Fatal(probs)
+	}
+	items := r.RegressionAssessment.Items
+	if len(items) != 2 || items[0].Risk != "high" || !slices.Equal(items[0].Tests, []string{"example.com/store.TestFindUser"}) || len(items[1].Tests) != 0 {
+		t.Fatalf("items %+v", items)
+	}
+	// A review without items (written before the field existed) parses
+	// with no evidence.
+	if r, probs := ParseCodeReview([]byte(goodCode), ac, prev); r == nil || len(r.RegressionAssessment.Items) != 0 {
+		t.Fatalf("legacy review: %v %+v", probs, r)
+	}
+	for name, c := range map[string]struct{ raw, want string }{
+		"item risk enum":    {with(`[{"risk":"severe","description":"d","tests":[]}]`), `$.regression_assessment.items[0].risk: "severe" is not one of`},
+		"item missing":      {with(`[{"risk":"high","description":"d"}]`), "$.regression_assessment.items[0].tests: missing required field"},
+		"item unknown":      {with(`[{"risk":"high","description":"d","tests":[],"why":"x"}]`), "$.regression_assessment.items[0].why: unknown field"},
+		"null items":        {with(`null`), "$.regression_assessment.items: must be array, not null"},
+		"empty description": {with(`[{"risk":"high","description":" ","tests":["a.TestA"]}]`), "regression_assessment.items[0].description is empty"},
+		"blank test":        {with(`[{"risk":"high","description":"d","tests":[""]}]`), "regression_assessment.items[0].tests[0] is empty"},
+	} {
+		r, probs := ParseCodeReview([]byte(c.raw), ac, prev)
+		if r != nil || !strings.Contains(strings.Join(probs, "\n"), c.want) {
+			t.Errorf("%s: %v", name, probs)
+		}
+	}
+	// Go callers that never set Items still write schema-valid JSON.
+	b, _ := json.Marshal(CodeReview{RegressionAssessment: RiskNotes{Risk: "low"}})
+	if !strings.Contains(string(b), `"regression_assessment":{"risk":"low","notes":"","items":[]}`) {
+		t.Fatalf("marshal %s", b)
+	}
+	b, _ = json.Marshal(RegressionItem{Risk: "high", Description: "d"})
+	if string(b) != `{"risk":"high","description":"d","tests":[]}` {
+		t.Fatalf("marshal %s", b)
+	}
+	// The schema and the Go types list the same fields.
+	cr := loadStrict(t, schemas.CodeReview)
+	ra := cr.Properties["regression_assessment"]
+	if !slices.Equal(propKeys(ra), fieldTags(RiskNotes{})) || !slices.Equal(propKeys(ra.Properties["items"].Items), fieldTags(RegressionItem{})) {
+		t.Error("regression assessment fields differ from the schema")
+	}
+	sameEnum(t, "item risk", ra.Properties["items"].Items.Properties["risk"].Enum, RegressionRisks)
+}

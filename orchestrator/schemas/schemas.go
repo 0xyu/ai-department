@@ -32,3 +32,9 @@ var PlanReview []byte
 //
 //go:embed code-review.schema.json
 var CodeReview []byte
+
+// PhaseReport is phase-report.schema.json: the Phase Completion Report
+// committed with each phase (.aco/reports/phase-NN.json).
+//
+//go:embed phase-report.schema.json
+var PhaseReport []byte

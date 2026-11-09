@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0xyu/aco/schemas/v1/phase-report.schema.json",
+  "title": "ACO Phase Completion Report (v1)",
+  "description": "The report the orchestrator writes into .aco/reports/phase-NN.json and commits with the phase (implementation plan section 11.9). Every object lists all of its properties as required and forbids others. The phase commit SHA is not part of the report: it is known only after the commit and is recorded in the git note, the state store, and the next phase's report.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "run_id", "phase", "title", "goal", "plan_version", "plan_hash", "base_commit", "reviewed_tree", "attempt", "attempts", "sessions", "implementer_model", "reviewer_model", "acceptance_criteria", "requirements", "files", "diff_stat", "gates", "regressions", "regressions_seen", "security", "reviews", "findings", "deferred", "implementation", "usage", "digest", "generated_at"],
+  "properties": {
+    "format": {"type": "string", "enum": ["aco.phase-report/v1"]},
+    "run_id": {"type": "string"},
+    "phase": {"type": "integer"},
+    "title": {"type": "string"},
+    "goal": {"type": "string"},
+    "plan_version": {"type": "string"},
+    "plan_hash": {"type": "string"},
+    "base_commit": {"type": "string", "description": "The commit the phase started from (previous phase commit or the freeze commit)."},
+    "reviewed_tree": {"type": "string", "description": "Tree hash the final review approved; the commit is this tree plus the two report files."},
+    "attempt": {"type": "integer", "description": "The attempt that was committed."},
+    "attempts": {"type": "integer"},
+    "sessions": {
+      "type": "array",
+      "description": "Claude session IDs, one or more per attempt.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt", "session_id"],
+        "properties": {
+          "attempt": {"type": "integer"},
+          "session_id": {"type": "string"}
+        }
+      }
+    },
+    "implementer_model": {"type": "string"},
+    "reviewer_model": {"type": "string"},
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "status", "evidence", "tests"],
+        "properties": {
+          "id": {"type": "string"},
+          "text": {"type": "string"},
+          "status": {"type": "string", "enum": ["met", "partial", "not_met", "not_verifiable"]},
+          "evidence": {"type": "string", "description": "From the final review."},
+          "tests": {"type": "array", "items": {"type": "string"}, "description": "Tests the implementer reported as covering the criterion."}
+        }
+      }
+    },
+    "requirements": {"type": "array", "items": {"type": "string"}},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "old_path", "status", "added", "deleted", "binary"],
+        "properties": {
+          "path": {"type": "string"},
+          "old_path": {"type": "string"},
+          "status": {"type": "string", "enum": ["added", "modified", "deleted", "renamed", "copied", "type_changed"]},
+          "added": {"type": "integer"},
+          "deleted": {"type": "integer"},
+          "binary": {"type": "boolean"}
+        }
+      }
+    },
+    "diff_stat": {"type": "string"},
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate", "status", "required", "source", "commands", "duration_ms", "summary", "baseline"],
+        "properties": {
+          "gate": {"type": "string", "enum": ["typecheck", "lint", "unit", "integration", "build", "security"]},
+          "status": {"type": "string", "enum": ["passed", "failed", "timeout", "error", "not_applicable", "skipped"]},
+          "required": {"type": "boolean"},
+          "source": {"type": "string"},
+          "commands": {"type": "array", "items": {"type": "string"}},
+          "duration_ms": {"type": "integer"},
+          "summary": {"type": "string"},
+          "baseline": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["has_baseline", "new_failing_tests", "regressions", "fixed_tests", "preexisting_failures", "new_issues", "preexisting_issues", "new_vulns", "preexisting_vulns"],
+            "properties": {
+              "has_baseline": {"type": "boolean"},
+              "new_failing_tests": {"type": "integer"},
+              "regressions": {"type": "integer"},
+              "fixed_tests": {"type": "integer"},
+              "preexisting_failures": {"type": "integer"},
+              "new_issues": {"type": "integer"},
+              "preexisting_issues": {"type": "integer"},
+              "new_vulns": {"type": "integer"},
+              "preexisting_vulns": {"type": "integer"}
+            }
+          }
+        }
+      }
+    },
+    "regressions": {"type": "array", "items": {"type": "string"}, "description": "Tests that passed at baseline and fail on the committed tree (empty when the gates pass)."},
+    "regressions_seen": {"type": "array", "items": {"type": "string"}, "description": "Every regression detected in any gate round of the phase, including ones fixed before review."},
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scanners", "new_findings", "preexisting_findings", "policy"],
+      "properties": {
+        "scanners": {"type": "array", "items": {"type": "string"}},
+        "new_findings": {"type": "array", "items": {"type": "string"}},
+        "preexisting_findings": {"type": "array", "items": {"type": "string"}},
+        "policy": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "path", "line", "blocking", "message"],
+            "properties": {
+              "code": {"type": "string"},
+              "path": {"type": "string"},
+              "line": {"type": "integer"},
+              "blocking": {"type": "boolean"},
+              "message": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attempt", "round", "verdict", "gate_passed", "tree_hash", "new_findings", "reasons"],
+        "properties": {
+          "attempt": {"type": "integer"},
+          "round": {"type": "integer"},
+          "verdict": {"type": "string", "enum": ["approve", "request_changes"]},
+          "gate_passed": {"type": "boolean"},
+          "tree_hash": {"type": "string"},
+          "new_findings": {"type": "array", "items": {"type": "string"}},
+          "reasons": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "attempt", "severity", "category", "resolution_class", "status", "title", "file", "line_start", "line_end", "opened_round", "closed_round", "reopen_count", "dispute_count", "response", "response_detail", "ruling"],
+        "properties": {
+          "id": {"type": "string"},
+          "attempt": {"type": "integer"},
+          "severity": {"type": "string", "enum": ["blocker", "major", "minor", "nit"]},
+          "category": {"type": "string"},
+          "resolution_class": {"type": "string", "enum": ["fixable", "spec_conflict", "unsafe", "environment", "deferred"]},
+          "status": {"type": "string"},
+          "title": {"type": "string"},
+          "file": {"type": "string"},
+          "line_start": {"type": "integer"},
+          "line_end": {"type": "integer"},
+          "opened_round": {"type": "integer"},
+          "closed_round": {"type": "integer"},
+          "reopen_count": {"type": "integer"},
+          "dispute_count": {"type": "integer"},
+          "response": {"type": "string", "description": "The implementer's latest answer: fixed, disputed, cannot_fix_within_spec, cannot_fix_safely, or empty."},
+          "response_detail": {"type": "string"},
+          "ruling": {"type": "string", "description": "The reviewer's latest note on the finding."}
+        }
+      }
+    },
+    "deferred": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "category", "title", "file", "reason"],
+        "properties": {
+          "id": {"type": "string"},
+          "severity": {"type": "string"},
+          "category": {"type": "string"},
+          "title": {"type": "string"},
+          "file": {"type": "string"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "decisions", "known_gaps", "tests", "unverified"],
+      "properties": {
+        "summary": {"type": "string"},
+        "decisions": {"type": "array", "items": {"type": "string"}},
+        "known_gaps": {"type": "array", "items": {"type": "string"}},
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "change", "covers"],
+            "properties": {
+              "path": {"type": "string"},
+              "change": {"type": "string"},
+              "covers": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "unverified": {"type": "array", "items": {"type": "string"}, "description": "Claims of the implementation report that the diff does not confirm."}
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agents", "duration_ms", "subscription_pauses", "api_fallbacks"],
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["agent", "role", "model", "auth_mode", "calls", "turns", "input_tokens", "output_tokens", "cost_usd", "charged"],
+            "properties": {
+              "agent": {"type": "string", "enum": ["claude", "codex"]},
+              "role": {"type": "string"},
+              "model": {"type": "string"},
+              "auth_mode": {"type": "string", "enum": ["subscription", "api"]},
+              "calls": {"type": "integer"},
+              "turns": {"type": "integer"},
+              "input_tokens": {"type": "integer"},
+              "output_tokens": {"type": "integer"},
+              "cost_usd": {"type": "number", "description": "USD charged in api mode; an estimate in subscription mode (charged false)."},
+              "charged": {"type": "boolean"}
+            }
+          }
+        },
+        "duration_ms": {"type": "integer"},
+        "subscription_pauses": {"type": "integer"},
+        "api_fallbacks": {"type": "integer"}
+      }
+    },
+    "digest": {"type": "string", "description": "Hand-off to later phases (at most about 1.5k tokens)."},
+    "generated_at": {"type": "string"}
+  }
+}

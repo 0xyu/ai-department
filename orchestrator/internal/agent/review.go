@@ -212,10 +212,43 @@ type StatusNotes struct {
 	Notes  string `json:"notes"`
 }
 
-// RiskNotes is the regression assessment.
+// RiskNotes is the regression assessment. Items are the concrete risks,
+// each with the tests that cover it; the Review Decision Gate accepts a
+// high risk only when every high-risk item cites tests that passed in the
+// reviewed gate round (§11.7).
 type RiskNotes struct {
-	Risk  string `json:"risk"`
-	Notes string `json:"notes"`
+	Risk  string           `json:"risk"`
+	Notes string           `json:"notes"`
+	Items []RegressionItem `json:"items"`
+}
+
+// MarshalJSON writes items as [] when there are none, as the schema needs.
+func (r RiskNotes) MarshalJSON() ([]byte, error) {
+	type plain RiskNotes
+	p := plain(r)
+	if p.Items == nil {
+		p.Items = []RegressionItem{}
+	}
+	return json.Marshal(p)
+}
+
+// RegressionItem is one regression risk and its evidence: the tests that
+// cover it, each named by its identity in the gate results
+// (package.TestName, as gates.TestCase.ID).
+type RegressionItem struct {
+	Risk        string   `json:"risk"`
+	Description string   `json:"description"`
+	Tests       []string `json:"tests"`
+}
+
+// MarshalJSON writes tests as [] when there are none, as the schema needs.
+func (i RegressionItem) MarshalJSON() ([]byte, error) {
+	type plain RegressionItem
+	p := plain(i)
+	if p.Tests == nil {
+		p.Tests = []string{}
+	}
+	return json.Marshal(p)
 }
 
 // TestAssessment says whether the tests cover the criteria.
@@ -413,6 +446,7 @@ func ParseCodeReview(raw []byte, acIDs, previousIDs []string) (*CodeReview, []st
 	if err != nil {
 		return nil, []string{"code review schema: " + err.Error()}
 	}
+	raw = upgradeRegressionItems(raw)
 	if probs := validateJSON(cs, raw); len(probs) > 0 {
 		return nil, probs
 	}
@@ -426,6 +460,14 @@ func ParseCodeReview(raw []byte, acIDs, previousIDs []string) (*CodeReview, []st
 	p.enum("plan_conformance.status", r.PlanConformance.Status, ConformanceStatuses)
 	p.enum("security_assessment.status", r.SecurityAssessment.Status, SecurityStatuses)
 	p.enum("regression_assessment.risk", r.RegressionAssessment.Risk, RegressionRisks)
+	for i, it := range r.RegressionAssessment.Items {
+		pre := fmt.Sprintf("regression_assessment.items[%d]", i)
+		p.enum(pre+".risk", it.Risk, RegressionRisks)
+		p.text(pre+".description", it.Description)
+		for j, t := range it.Tests {
+			p.text(fmt.Sprintf("%s.tests[%d]", pre, j), t)
+		}
+	}
 	seen := map[string]int{}
 	for i, a := range r.AcceptanceCriteria {
 		p.enum(fmt.Sprintf("acceptance_criteria[%d].status", i), a.Status, ACStatuses)
@@ -460,6 +502,35 @@ func ParseCodeReview(raw []byte, acIDs, previousIDs []string) (*CodeReview, []st
 		return nil, p
 	}
 	return &r, nil
+}
+
+// upgradeRegressionItems accepts a review written before
+// regression_assessment.items existed: a missing items list is read as
+// empty (no regression evidence), so a high risk stays uncovered. Anything
+// else is left to the schema check.
+func upgradeRegressionItems(raw []byte) []byte {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(raw, &top) != nil {
+		return raw
+	}
+	var ra map[string]json.RawMessage
+	if json.Unmarshal(top["regression_assessment"], &ra) != nil || ra == nil {
+		return raw
+	}
+	if _, ok := ra["items"]; ok {
+		return raw
+	}
+	ra["items"] = json.RawMessage("[]")
+	b, err := json.Marshal(ra)
+	if err != nil {
+		return raw
+	}
+	top["regression_assessment"] = b
+	out, err := json.Marshal(top)
+	if err != nil {
+		return raw
+	}
+	return out
 }
 
 // Inconsistencies lists where the verdict contradicts the details. The

@@ -260,7 +260,7 @@ type Result struct {
 	Justification string          `json:"justification,omitempty"`
 	Source        Source          `json:"source,omitempty"`
 	TreeHash      string          `json:"tree_hash"`
-	TreeAfter     string          `json:"tree_after,omitempty"` // set when the gate changed the working state
+	TreeAfter     string          `json:"tree_after,omitempty"` // the first other tree seen at a command boundary (the gate changed the working state, even if it restored it later)
 	Commands      []CommandResult `json:"commands"`
 	Duration      time.Duration   `json:"duration_ns"`
 

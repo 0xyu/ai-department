@@ -56,6 +56,8 @@ func TestHelperProcess(t *testing.T) {
 		}
 		fmt.Fprintln(out, "FAIL\texample.com/x\t0.5s")
 		os.Exit(1)
+	case "write": // writes args[2] to the file args[1]
+		os.WriteFile(args[1], []byte(args[2]), 0o644)
 	case "env":
 		for _, kv := range os.Environ() {
 			fmt.Println(kv)

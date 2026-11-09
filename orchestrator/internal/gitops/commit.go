@@ -1,6 +1,7 @@
 package gitops
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -173,6 +174,7 @@ var (
 	ErrTreeMismatch     = errors.New("gitops: staged tree differs from the expected tree")
 	ErrUnreviewedChange = errors.New("gitops: working state has changes outside the reviewed tree")
 	ErrBranchMoved      = errors.New("gitops: branch moved since the expected head")
+	ErrExtraMismatch    = errors.New("gitops: a staged extra file differs from its expected content")
 	ErrBadPath          = errors.New("gitops: path is not a clean repository-relative path")
 )
 
@@ -282,6 +284,13 @@ type CommitSpec struct {
 	// Extra are files added on top of the reviewed tree (the Phase Completion
 	// Report). They must exist in the working tree.
 	Extra []string
+	// ExtraData, when set, is the exact content of Extra files: before the
+	// branch moves, each listed file must be staged in the final tree as a
+	// regular, non-executable file (100644) whose blob is exactly these
+	// bytes, or the commit is refused with ErrExtraMismatch. This binds the
+	// commit to the generated content even if the file is replaced after it
+	// was written. Every key must be in Extra.
+	ExtraData map[string][]byte
 	// RequireExact refuses the commit when the working state has any change
 	// outside Paths+Extra (used for the plan freeze commit).
 	RequireExact bool
@@ -343,6 +352,11 @@ func (r *Repo) Commit(ctx context.Context, spec CommitSpec) (*CommitResult, erro
 			return nil, fmt.Errorf("gitops: extra file %s does not exist", p)
 		}
 	}
+	for p := range spec.ExtraData {
+		if !slices.Contains(extra, p) {
+			return nil, fmt.Errorf("gitops: extra data for %s, which is not an extra file", p)
+		}
+	}
 	stagePaths, err := r.existingPaths(ctx, paths)
 	if err != nil {
 		return nil, err
@@ -371,6 +385,9 @@ func (r *Repo) Commit(ctx context.Context, spec CommitSpec) (*CommitResult, erro
 		if final != want {
 			return nil, ErrTreeMismatch
 		}
+	}
+	if err := r.verifyBlobs(ctx, final, spec.ExtraData); err != nil {
+		return nil, err
 	}
 	if spec.ExpectedTree != "" || spec.RequireExact {
 		working, err := r.workingTree(ctx, extra)
@@ -401,6 +418,38 @@ func (r *Repo) Commit(ctx context.Context, spec CommitSpec) (*CommitResult, erro
 		return nil, err
 	}
 	return &CommitResult{Commit: commit, Tree: final, Branch: branch}, nil
+}
+
+// verifyBlobs checks that each path of want is a regular, non-executable
+// file in tree whose blob is exactly the given bytes (hashed without
+// filters, as stored).
+func (r *Repo) verifyBlobs(ctx context.Context, tree string, want map[string][]byte) error {
+	paths := make([]string, 0, len(want))
+	for p := range want {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		oid, err := r.run(ctx, call{args: []string{"hash-object", "-t", "blob", "--no-filters", "--stdin"},
+			stdin: bytes.NewReader(want[p])})
+		if err != nil {
+			return err
+		}
+		b, err := r.run(ctx, call{args: []string{"--literal-pathspecs", "ls-tree", "-z", "--full-tree", tree, "--", p}})
+		if err != nil {
+			return err
+		}
+		entries := splitNUL(b)
+		if len(entries) != 1 {
+			return fmt.Errorf("%w: %s is not in the staged tree", ErrExtraMismatch, p)
+		}
+		meta, name, _ := strings.Cut(entries[0], "\t")
+		f := strings.Fields(meta)
+		if name != p || len(f) != 3 || f[0] != "100644" || f[1] != "blob" || f[2] != strings.TrimSpace(string(oid)) {
+			return fmt.Errorf("%w: %s", ErrExtraMismatch, p)
+		}
+	}
+	return nil
 }
 
 // TrailersOf returns the trailers of a commit, parsed by

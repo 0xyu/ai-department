@@ -186,6 +186,9 @@ type planSpec struct {
 	reqs      int
 	agentsMD  string
 	breakGate bool // phase 1 lacks its security gate (a deterministic check error)
+	// integration declares an integration gate command instead of
+	// not_applicable.
+	integration bool
 }
 
 // planJSON builds a structured plan package: phase i covers REQ-i (the
@@ -208,6 +211,9 @@ func planJSON(s planSpec) []byte {
 			"unit":        m{"commands": []string{"go test ./..."}},
 			"integration": m{"not_applicable": true, "justification": "no external services"},
 			"build":       m{"commands": []string{"go build ./..."}}, "security": m{"scanners": []string{"secrets"}}}
+		if s.integration {
+			gatesM["integration"] = m{"commands": []string{"go test -tags=integration ./..."}}
+		}
 		if s.breakGate && n == 1 {
 			delete(gatesM, "security")
 		}

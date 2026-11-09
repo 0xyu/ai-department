@@ -12,7 +12,7 @@
 | Phase 6 | 质量门执行器 | 已完成（staticcheck/gosec/govulncheck 本次未运行；三平台 CI 与 `-race` 尚未运行） |
 | Phase 7 | 基于 Codex CLI 的 GPT 评审 | 已完成（订阅模式实测通过；API 模式实测、staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行） |
 | Phase 8 | 第 1、2 阶段流水线 | 已完成（订阅模式实测通过；API 模式实测、staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行） |
-| Phase 9 | 第 3 阶段单阶段引擎 | 未开始 |
+| Phase 9 | 第 3 阶段单阶段引擎 | 已完成（全部离线场景与真实质量门集成测试通过；staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行；真实 Claude/GPT 的阶段循环实测待 Phase 10 的 `aco run`） |
 | Phase 10 | 运行生命周期与恢复 | 未开始 |
 | Phase 11 | 第 4 阶段最终验证 | 未开始 |
 | Phase 12 | 安全加固与沙箱 | 未开始 |
@@ -245,6 +245,31 @@
 - 测试：决策门表驱动测试与台账测试；伪造规划器/评审器 + 真实 Git 与状态库的场景测试，覆盖 AC-08.1（首轮通过并冻结，提交只含计划包和生成的 AGENTS.md，标签、trailer、锁哈希一致）、AC-08.2（未覆盖需求 + 前向依赖 → 修订 → 第 2 轮冻结）、AC-08.3（持续失败 → 在 plan_review 阻塞，无冻结提交，最新计划包和评审已保存）、AC-08.4（`--plan` Markdown 计划跳过第 1 阶段）、导入计划的转换式修订、检查失败不调用 GPT、`plan_invalid`、各类 agent 错误、重试、评审越权与格式失败、调用上限、取消、被链接的 `.aco`（Windows 上用 junction 实测）。`-tags=integration` 端到端测试（完整模式，经过检查失败、评审失败、争议和复审通过；冻结后的计划包通过 validate-plan 检查且锁已验证；用户检出逐字节不变）。`-tags=live`（`ACO_LIVE_PLAN=1`）真实 Claude + Codex（AC-08.5）。CLI 端到端测试。
 - 本机已运行：`gofmt`、`go vet`（默认、integration、live 标签）、全部单元测试、全部 integration 测试、`CGO_ENABLED=0 go build`。订阅模式 live 测试通过（约 4 分钟）：真实 Claude 生成 2 个阶段的计划，GPT 第 1 轮提出 1 个 major 问题（lint 命令在 Windows 的 shell 中无法运行），Claude 修订后第 2 轮通过并冻结；另一次运行第 1 轮即通过。staticcheck、gosec、govulncheck 本机未安装，本次未运行。
 
+## Phase 9 完成内容
+
+详见 [docs/phase-loop.md](docs/phase-loop.md)。
+
+- `internal/engine`：第 3 阶段单阶段引擎 `RunPhase`（运行须为 executing，阶段为 pending，或 `--retry` 后的 initializing）。结果为已提交或已阻塞；订阅额度暂停、auth/额度/预算失败、取消时由结果中的运行状态说明，只有系统问题返回错误（运行以 internal 失败）。
+  - 初始化（§11.3）：校验 `plan.lock.json`（计划包与 AGENTS.md 逐文件哈希，且与运行冻结的计划哈希一致）；工作树干净、`HEAD` 等于上一阶段提交（第 1 阶段为冻结提交）、`HEAD` 在运行分支上且分支未被移动；依赖阶段已提交、其提交是 `HEAD` 的祖先、其阶段完成报告存在且通过 Schema。任一失败即阻塞 `init_check_failed`，不调用任何 agent。质量门无法解析时阻塞 `environment`。基线：读取为 `HEAD` 保存的质量门结果，没有时（第 1 阶段）先完整跑一轮并保存；这一轮只有在是干净基础树（`HEAD` 的树）的有效证据时才保存（不是 stale，且树等于基础树），否则不保存、不重置工作树，最多跑 3 次，仍不行则在调用实现者之前阻塞 `init_check_failed`，避免运行中被改动的树上看到的失败日后被当作已有失败。冻结的 `IMPLEMENTATION_PLAN.md`、`phases/PNN.md`、`AGENTS.md` 从工作树按字节原样读取并传给 Claude，另附已提交阶段的摘要、质量门命令、AC ID 和 scope 路径。每次尝试都以 `Start` 开新会话。
+  - 质量门：失败即停、与基线比较，每轮写入 `gate_results` 并逐门发出事件；记录阶段中出现过的所有回归。质量门证据绑定到同一棵树：只有每个结果都记录了本轮的树、没有质量门在执行中改动树（`TreeAfter`，执行器在一个质量门的每条命令之后都检查树，命令改动树后又被后续命令恢复也能发现）、且本轮结束时工作树仍是该树，这一轮才有效（`evidenceTree`）；否则（其他写入者，或质量门改动了树，即使后面的质量门又改回）该轮为 stale，只记录（步骤与 `gate.completed` 上标 `stale`），不能授权评审或提交，并在新的候选树上重跑。stale 轮计为一次质量门修复尝试，受 `limits.gate_fix_attempts` 限制。红色轮次交给 Claude（同一会话 `gate_fix`，含摘要、回归、新问题、日志）；环境类失败（命令不存在、服务不可达、ACO 无法运行的质量门）立即阻塞。红色代码不送评审。
+  - 评审（§11.6）：上下文含计划概览、阶段列表（done/current/future）、规格与 AGENTS.md 原文、阶段完整 diff 与上次评审后的增量 diff、全部质量门结果、基线比较、测试变更、回归（当前及阶段内出现过的）、安全门与 diff 策略结果、导入了改动 Go 包的文件及改动代码旁的测试、实现报告（未验证）、复审时的台账。
+  - 代码问题台账：引擎分配 `F-<阶段>-<序号>`（跨尝试唯一）；处理 resolved / unresolved（"已修复"被否定或已关闭问题再出现即重开）/ partially_resolved / dispute_rejected / dispute_accepted；Claude 回答 `cannot_fix_*` 后评审接受争议即视为确认无法修复。同指纹（类别、文件、标题）的新问题更新旧问题：保留 ID 和历史（打开轮次、重开与争议次数、Claude 的回答），但采用评审当前给出的严重度、建议分类和细节，已关闭或已推迟的问题重新打开；分诊按当前状态判断，之前的推迟或降级不能掩盖当前阻塞的问题（已推迟的 minor 以范围内 major 再次出现时为 fixable）。范围蔓延降级按当前严重度重新判断，只适用于截止轮次之后才首次提出的问题。范围蔓延控制：截止轮次之后、不涉及最新改动行的新 blocker/major（安全、回归除外）降为 minor 并推迟。
+  - 评审决策门 `DecideReviewGate`、分诊 `ClassifyFinding`/`Triage`、提交门 `DecideCommitGate`、收敛守卫 `CheckGuards` 均为纯函数，带穷举表驱动测试。评审结论只记录不采用：approve 但决策门失败时发出 `review.inconsistent`。分诊覆盖规则：确认的 cannot_fix_safely → unsafe、cannot_fix_within_spec → spec_conflict；降级、out_of_scope、minor/nit → deferred；文件或 required_change 中的路径命中受保护路径 → unsafe；安全问题复审 2 轮仍未解决 → unsafe；否则采用评审建议或 fixable。评审建议的 deferred 不能推迟范围内的 blocker/major（含安全问题），此时按 fixable 处理；只有 out_of_scope、minor/nit 和被降级的问题会推迟，评审决策门也会再次检查（已推迟的范围内 blocker/major 仍使决策门失败）。unsafe / spec_conflict / environment 立即阻塞，任何严重度的此类未关闭问题都使评审决策门失败。
+  - 高回归风险的证据（§11.7）：评审输出新增 `regression_assessment.items`（每项含风险级别、说明、覆盖测试）。评估或任一项为 high 时，至少要有一个高风险项，且每个高风险项至少引用一个测试；每个引用必须按精确身份（`package.TestName`，或能唯一确定一个测试的测试名）对应到本轮被接受的质量门结果中的一个测试，且该测试的所有结果均为 pass。缺失、有歧义、跳过或失败的引用都使决策门保持失败（`regression_risk_high:item-N`）并作为工作项发给 Claude；说明文字不算证据，前缀或子串不算匹配。评审包按质量门列出测试身份供评审引用。没有 `items` 的旧格式评审仍可解析，视为没有证据。
+  - 修复：可修复问题按 blocker → major、同级内安全 → 回归 → 其他的顺序交给 Claude（`review_fix`）；不是问题的决策门原因（AC 未满足、偏离计划、高回归风险）作为 `R-…` 工作项一并发送。
+  - 收敛守卫：策略违规、反复重开、争议僵局、无进展、评审轮数、连续质量门修复次数、agent 未产出报告、阶段用量（每次尝试的调用数、轮数、超时；每次调用前检查）。守卫触发即结束尝试；在 `limits.phase_restarts` 内把工作树重置到阶段基点、以新会话和"上次尝试的教训"重新开始，否则按守卫类别阻塞。运行级调用数与轮数上限（包含前面阶段的调用）使运行失败。
+  - agent 错误（§14.1）：未完成/轮数用尽 → 同一会话 `continue`（最多 2 次，只缺回答的报告可接受）；崩溃/超时 → 重置到步骤检查点后重试；瞬时错误重试；仍失败则结束尝试；评审格式无效或越权 → 结束尝试；订阅额度 → 暂停（重置时间 + 2 分钟）；auth / API 额度 / 预算 → 失败。
+  - 提交门（§11.8）：重新计算当前树和改动路径；与评审树不同或质量门结果不是该树的 → 回到评审（先重跑质量门）；计划锁不符 → `plan_integrity`；最终 diff 的策略复查有阻塞项或其他检查失败 → `commit_gate_blocked`。通过后写 `.aco/reports/phase-NN.{md,json}`，按 `ACO-Phase-Attempt` 查重，用 `gitops.Commit` 只提交评审过的路径和两份报告（多余改动或未跟踪文件即拒绝）；提交绑定到生成的报告字节（`ExtraData`：分支移动前核对最终树中两份报告的 blob 与生成并校验过的内容完全一致、且为普通非可执行文件，与 notes 和 `reports` 摘要一致，否则 `ErrExtraMismatch`），父提交固定为本阶段校验过的基础提交（`ExpectedHead`，在 ref 比较交换之外），提交信息含摘要、AC 表、评审轮数和 8 个 trailer；打 `aco/<run>/phase-NN` 标签、写 `git notes`（报告 JSON + 提交 SHA）、记录 `commits`/`reports`，并把本轮质量门结果保存为下一阶段的基线。若提交门通过后、暂存前工作树发生变化，提交在移动分支前被拒绝（`ErrTreeMismatch` / `ErrUnreviewedChange`，报告文件不再是生成的字节时为 `ErrExtraMismatch`）：引擎确认 `HEAD` 未变后把提交步骤记为失败（结果 `retry: worktree_drift`），把两份报告文件恢复到本次提交尝试之前的状态——只处理仍是本次写入内容（字节与权限）的文件，被他人替换或删除的报告与其他工作树改动一样保留，发出带 `worktree_drift` 原因的 `commit_gate.failed`，然后重新跑质量门并做独立评审，再走提交门与策略复查；每次漂移计为一轮未通过的评审（`limits.review_rounds`），每次提交尝试使用独立的步骤键。被替换的报告属于受保护路径（`.aco/**`）的改动，复审后提交门的策略复查会阻塞 `commit_gate_blocked`。分支被移动（包括质量门之后、暂存之前出现的同树外部提交）或分支前进后的失败（标签、notes、状态库）不属于漂移，运行失败，不产生阶段提交。
+  - 阻塞：不向运行分支提交；工作状态存入 `refs/aco/<run>/blocked/PNN`；产物 `reports/phase-NN-blocked.md` 写明类别、详情、WIP ref、需要人决定的事项、未关闭问题及 Claude 的回答、最后一轮质量门及日志路径、触发的守卫和恢复选项；阶段与运行进入 blocked。
+  - 每次 agent 调用都是一个步骤：调用前后各一个检查点 `refs/aco/<run>/PNN/aK/sM`，意图/结果记录（含运行锁持有者），`invocations` 行关联步骤；质量门轮次和提交也是步骤。
+- `internal/reports`（新包）：阶段完成报告模型、`schemas/phase-report.schema.json`（每个对象封闭、全部字段必填）、Markdown 渲染、Schema 校验与严格解析、读取时拒绝链接并核对阶段号、阶段摘要（≤ 6000 字符）。报告包含 §11.9 的全部内容，另列出阶段内出现过的回归和实现报告中与 diff 不符的说法。报告写入前经过脱敏。
+- `agent.ValidateSchema`：用内置的 JSON Schema 子集校验任意文档（报告校验使用）。
+- 文档：`docs/phase-loop.md`；实施计划 §11 末尾补充"As built in Phase 9"；`docs/lifecycle.md` 补充说明。
+- 测试：纯函数穷举表（评审决策门、分诊、范围蔓延、提交门、守卫、台账、修复顺序、增量改动行）；伪造实现者/评审器/质量门 + 真实 Git 与状态库的场景测试，覆盖 AC-09.1 全部 11 个场景（另有环境类失败、范围蔓延推迟、订阅暂停、未完成报告续写）；AC-09.3 的实现提示词黄金测试（规格、AGENTS.md、计划概览原文）；`internal/reports` 的 Schema 校验与往返、Schema 与 Go 类型同步、无效报告、链接拒绝、摘要上限、Markdown 章节（AC-09.2）。`-tags=integration`：真实质量门执行器与 Go 工具链跑两个阶段，真实 `go vet` 失败在同一会话中修复，提交按顺序，两个阶段共用一次基线。
+- 修订（Phase 9 复查）：引擎强制推迟规则（评审建议的 deferred 不能清除范围内 blocker/major）；质量门证据绑定到同一棵树，stale 轮重跑；高回归风险改为逐项、按精确测试身份核对的证据（评审 Schema、提示词、解析器同步更新，兼容旧格式）；提交时工作树漂移可恢复（丢弃本次报告文件，重新质量门与评审）。新增测试：推迟规则与证据的表驱动测试；approve + 建议推迟的范围内 major 的阶段测试；质量门改动树后又恢复、持续改动树的阶段测试；提交门通过后暂存前注入改动的阶段测试。
+- 修订（Phase 9 第二次复查）：同指纹问题按当前严重度和分类重新分诊；初始基线只接受干净基础树上的有效证据，并在质量门命令边界检测树变化；提交绑定到生成的报告字节和文件权限，回滚只处理本次写入仍拥有的文件；阶段提交的父提交固定为校验过的基础提交。新增测试：已推迟 minor 以同指纹 major 再次出现的台账测试和两轮阶段测试；一个质量门内三条命令改动树、产生测试证据、再恢复树；stale 基线不能掩盖新失败、基线持续漂移即阻塞；仅报告被篡改、报告篡改加源文件漂移；质量门与暂存之间运行分支被空提交推进。
+- 本机已运行：`gofmt`、`go vet`（默认、integration、live 标签）、全部单元测试、engine 与 reports 的 integration 测试、`CGO_ENABLED=0 go build`。staticcheck、gosec、govulncheck 本机未安装，本次未运行。
+
 ## 已知事项
 
 - Phase 2 时本机无法下载 staticcheck；Phase 3 时已可下载并运行，整个代码库无问题。三平台 CI 仍需在 GitHub 上验证。符号链接相关测试在 Windows 上用 junction，在 Linux/macOS 上用符号链接，后者尚未在本机运行。
@@ -257,3 +282,4 @@
 - `--max-turns` 在 2.1.311 的 `--help` 中不显示，按 2.x 版本默认支持；不支持时由 ACO 按轮数兜底终止。
 - Phase 8：订阅额度暂停后的自动恢复、`aco resume`（含 `--revise-plan` 产生 plan-v2）由 Phase 10 实现；暂停时 `aco plan` 以退出码 1 结束。规划阶段的 agent 调用上限按单次运行计数（不跨进程恢复）。`--plan` 导入且仓库没有 AGENTS.md 时，只有在规划器参与修订并提议时才会生成 AGENTS.md。
 - Phase 6：Windows 上质量门命令需要 Git for Windows 的 sh；集成测试依赖的服务地址等只能通过固定的非密钥 `ExtraEnv` 传入，配置中暂无对应字段。Stage 4 的密钥全量扫描应与运行基础提交上的全项目模式基线比较（Phase 11 负责生成）。Node 和 Python 夹具只做了检测测试，未用真实工具链执行。
+- Phase 9：阶段循环尚未用真实 Claude/GPT 实测（需要 Phase 10 的 `aco run` 驱动）；场景测试使用伪造 agent，集成测试使用真实质量门。阶段中途崩溃后的对账续跑（按检查点重做或接受步骤）、暂停后的继续由 Phase 10 实现，`RunPhase` 目前只从 pending 或 `--retry` 后的 initializing 开始。§11.7 中"会话过大时以精简简报开新会话"尚未实现，修复始终在本次尝试的会话中继续。阶段用量上限按每次尝试计算。评审包中"导入了改动包的文件"只对 Go 模块做文本匹配，其他语言只列出改动代码旁的测试。高回归风险的覆盖按 `regression_assessment.items` 中逐项引用的测试判断（精确身份匹配本轮被接受的质量门结果），不再从评审说明文字中查找测试名。

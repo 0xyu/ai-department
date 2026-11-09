@@ -208,3 +208,46 @@ func hasPath(is []Issue, p string) bool {
 	}
 	return false
 }
+
+// One gate with three commands: the first changes the tree, the second
+// prints passing test evidence, the third restores the tree. The gate ends
+// on the tree it started on, but the change is seen at a command boundary,
+// so its evidence is not bound to one tree (TreeAfter is set).
+func TestGateTreeChangeAtCommandBoundary(t *testing.T) {
+	g := newGitRepo(t)
+	r := newRunner(t, func(o *Options) { o.Dir, o.Repo = g.dir, g.r })
+	ctx := context.Background()
+	app := filepath.Join(g.dir, "app.go")
+	orig, err := os.ReadFile(app)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := writeFile(t, t.TempDir(), "unit.jsonl", goEvents("example.com/app", map[string]string{"TestA": "pass"}))
+	s := spec(Unit,
+		helper("write", app, "package app\n\nfunc A() int { return 2 }\n"),
+		helper("gotest", events)+" -json",
+		helper("write", app, string(orig)))
+	round, err := r.Run(ctx, []Spec{s}, RunOptions{Baseline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := round.Gate(Unit)
+	if after, _ := g.r.WorkingTree(ctx); after != round.TreeHash {
+		t.Fatalf("the tree was not restored: %s, round %s", after, round.TreeHash)
+	}
+	if len(res.Commands) != 3 || len(res.Tests) != 1 || res.Tests[0].ID() != "example.com/app.TestA" {
+		t.Fatalf("commands %d, tests %+v", len(res.Commands), res.Tests)
+	}
+	if res.TreeHash != round.TreeHash || res.TreeAfter == "" || res.TreeAfter == res.TreeHash {
+		t.Fatalf("tree %q, tree after %q: the change inside the gate was not seen", res.TreeHash, res.TreeAfter)
+	}
+
+	// Commands that leave the tree alone: TreeAfter stays empty.
+	round, err = r.Run(ctx, []Spec{spec(Unit, helper("gotest", events)+" -json", helper("gotest", events)+" -json")}, RunOptions{Baseline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res := round.Gate(Unit); res.TreeAfter != "" {
+		t.Fatalf("unchanged tree reported as changed: %q", res.TreeAfter)
+	}
+}

@@ -113,7 +113,9 @@ stateDiagram-v2
 The edges added to §11.2 (attempt-ending guards while implementing or reviewing, an environment gate failure, a
 commit-gate block) come from §11.7, §11.8, and §14.1. Phases change only while the run is `executing`. Entering
 `initializing` always starts a new attempt (`attempts` row); the previous active attempt is marked `exhausted`, and
-the final attempt `committed` or `blocked`.
+the final attempt `committed` or `blocked`. The phase engine (Phase 9, [phase-loop.md](phase-loop.md)) only uses these
+edges; where there is no direct one it takes the legal path (for example `quality_gates → fixing → attempt_exhausted`
+or `reviewing → triage → blocked`).
 
 ### Blocked and failed reasons
 

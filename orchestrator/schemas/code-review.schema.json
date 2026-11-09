@@ -43,10 +43,24 @@
     "regression_assessment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["risk", "notes"],
+      "required": ["risk", "notes", "items"],
       "properties": {
         "risk": {"type": "string", "enum": ["low", "medium", "high"]},
-        "notes": {"type": "string"}
+        "notes": {"type": "string"},
+        "items": {
+          "type": "array",
+          "description": "One entry per concrete regression risk. tests names the covering tests exactly as the gate results list them (package.TestName). A high risk is accepted only when every high-risk item cites tests that passed in the reviewed gate round.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["risk", "description", "tests"],
+            "properties": {
+              "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+              "description": {"type": "string"},
+              "tests": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
       }
     },
     "test_assessment": {
