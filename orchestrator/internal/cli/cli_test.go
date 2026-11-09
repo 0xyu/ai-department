@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/0xyu/aco/internal/auth"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,16 @@ func (f fakeExec) Output(_ context.Context, _ string, name string, args ...strin
 			return string(b), err
 		case "auth":
 			return `{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}`, nil
+		}
+	}
+	if name == "codex" && len(args) > 0 {
+		switch args[0] {
+		case "exec":
+			b, err := os.ReadFile("../agent/codexreview/testdata/codex-exec-help-0.162.0.txt")
+			return string(b), err
+		case "features":
+			b, err := os.ReadFile("../agent/codexreview/testdata/codex-features-0.162.0.txt")
+			return string(b), err
 		}
 	}
 	return f.tools[name], nil
@@ -88,6 +99,12 @@ func (h *harness) run(args ...string) int {
 		Exec: fakeExec{tools: map[string]string{
 			"git": "git version 2.47.1", "claude": "2.1.311 (Claude Code)", "codex": "codex-cli 0.162.0",
 		}},
+		CodexStatus: func(_ context.Context, mode auth.Mode) (auth.CodexStatus, error) {
+			if mode == auth.API {
+				return auth.ParseCodexLoginStatus("Logged in using an API key - sk-proj-***12345"), nil
+			}
+			return auth.ParseCodexLoginStatus("Logged in using ChatGPT"), nil
+		},
 	}
 	return Run(context.Background(), args, sys)
 }

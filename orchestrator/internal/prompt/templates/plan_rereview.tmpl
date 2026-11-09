@@ -1,0 +1,17 @@
+{{define "plan_rereview.tmpl"}}
+{{template "reviewer_rules.tmpl" .}}
+# Task: re-review the revised implementation plan (round {{.Round}})
+
+The author revised the plan after the earlier review. Check every earlier finding against the revised package and give each one exactly one status in previous_findings:
+- "resolved": the revision fixes it;
+- "unresolved": it is not fixed (say what is still missing);
+- "dispute_accepted": the author disputed it and is right;
+- "dispute_rejected": the author disputed it and is wrong (say why).
+
+## Earlier findings and the author's responses (unverified)
+{{range .Previous}}{{data (printf "finding %s" .Finding.ID) (printf "id: %s\nseverity: %s\ndimension: %s\nlocation: %s\ntitle: %s\ndescription: %s\nrequired_change: %s\nauthor_response: %s\nauthor_detail: %s" .Finding.ID .Finding.Severity .Finding.Dimension .Finding.Location .Finding.Title .Finding.Description .Finding.RequiredChange (or (and .Response .Response.Response) "none") (or (and .Response .Response.Detail) "none"))}}
+
+{{end}}
+Then review the whole revised package again; report only problems that are not earlier findings as new findings.
+{{template "plan_review_body.tmpl" .}}
+{{end}}

@@ -1,0 +1,9 @@
+{{define "code_rereview.tmpl"}}
+{{template "reviewer_rules.tmpl" .}}
+# Task: re-review phase {{phase .Phase}} (attempt {{.Attempt}}, round {{.Round}})
+
+The author changed the code after the earlier review. Check every earlier finding, then review the complete change again (not only the latest edits): fixes can break other things.
+{{template "code_review_ledger.tmpl" .}}
+{{template "code_review_assess.tmpl" .}}
+{{template "code_review_context.tmpl" .}}
+{{end}}

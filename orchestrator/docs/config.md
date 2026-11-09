@@ -63,10 +63,12 @@ implementer:                        # Stages 3–4 (Claude Code)
   extra_allowed_bash: []            # extra Bash command prefixes allowed to the implementer
 reviewer:                           # GPT Sol 6.1 via Codex CLI
   kind: codex-cli                   # codex-cli | fake
-  model: ""                         # Codex model ID for GPT Sol 6.1 — required before any review; `aco doctor` warns while empty
-  fallback_model: ""
-  reasoning_effort: high            # minimal | low | medium | high | xhigh
+  model: gpt-6.1-sol                # Codex model ID of GPT Sol 6.1 (required); `aco doctor --probe` verifies it
+  fallback_model: ""                # tried after the schema retries of model are used up (same auth mode)
+  reasoning_effort: high            # minimal | low | medium | high | xhigh  (model_reasoning_effort)
   final_review: true
+  windows_sandbox: unelevated       # unelevated | elevated: Codex windows.sandbox, passed on Windows only
+  max_context_bytes: 524288         # context pack cap (>= 65536); larger content goes to artifact files
 
 auth:                               # defaults only; flags and env override (see below). No key fields exist.
   mode: subscription                # subscription | api

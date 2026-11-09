@@ -3,8 +3,12 @@ package doctor
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/0xyu/aco/internal/agent"
+	"github.com/0xyu/aco/internal/agent/codexreview"
 	"github.com/0xyu/aco/internal/auth"
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/i18n"
@@ -77,8 +81,8 @@ func TestDoctorHappyPath(t *testing.T) {
 	if got := i18n.T(i18n.EN, m["tool.claude"].Msg.Key, m["tool.claude"].Msg.Args...); got != "claude 2.1.311" {
 		t.Errorf("claude version line = %q", got)
 	}
-	if m["config.reviewer_model"].Status != Warn {
-		t.Errorf("empty reviewer.model should warn")
+	if m["config.reviewer_model"].Status != Info || m["config.reviewer_model"].Msg.Args[0] != config.DefaultReviewerModel {
+		t.Errorf("reviewer model line: %+v", m["config.reviewer_model"])
 	}
 	if m["auth.mode.claude"].Status != Info || m["auth.mode.codex"].Status != Info {
 		t.Errorf("auth mode lines missing")
@@ -150,4 +154,94 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// codexExec answers the Codex detection commands with recorded output.
+type codexExec struct{ FakeExec }
+
+func (c codexExec) Output(ctx context.Context, dir, name string, args ...string) (string, error) {
+	if name == "codex" && len(args) > 0 {
+		switch args[0] {
+		case "exec":
+			b, err := os.ReadFile("../agent/codexreview/testdata/codex-exec-help-0.162.0.txt")
+			return string(b), err
+		case "features":
+			b, err := os.ReadFile("../agent/codexreview/testdata/codex-features-0.162.0.txt")
+			return string(b), err
+		}
+	}
+	return c.FakeExec.Output(ctx, dir, name, args...)
+}
+
+func codexInput(t *testing.T, mode auth.Mode, status string) Input {
+	in := baseInput(t, codexExec{FakeExec{Tools: goodTools()}}, auth.Flags{CodexAuthMode: string(mode)},
+		map[string]string{"OPENAI_API_KEY": "sk-proj-FAKEFAKEFAKEFAKE12345"})
+	in.Codex = &CodexInput{Mode: mode, APIHome: "/home/u/.aco/codex-api", Status: func(context.Context) (auth.CodexStatus, error) {
+		return auth.ParseCodexLoginStatus(status), nil
+	}}
+	return in
+}
+
+func TestDoctorCodexChecks(t *testing.T) {
+	m := byID(Run(context.Background(), codexInput(t, auth.Subscription, "Logged in using ChatGPT")))
+	if m["codex.flags"].Status != OK || m["codex.auth"].Status != OK || m["codex.probe"].Status != Info {
+		t.Fatalf("subscription happy path: flags %+v auth %+v probe %+v", m["codex.flags"], m["codex.auth"], m["codex.probe"])
+	}
+	m = byID(Run(context.Background(), codexInput(t, auth.API, "Logged in using an API key - sk-proj-***12345")))
+	if m["codex.auth"].Status != OK || m["codex.auth"].Msg.Key != i18n.DoctorCodexAuthAPI {
+		t.Fatalf("api happy path: %+v", m["codex.auth"])
+	}
+	m = byID(Run(context.Background(), codexInput(t, auth.API, "Not logged in")))
+	if m["codex.auth"].Status != Info {
+		t.Errorf("fresh api home: %+v", m["codex.auth"])
+	}
+}
+
+// AC-07.5: a login that does not match the resolved mode fails preflight
+// with a Simplified Chinese explanation of what to change.
+func TestDoctorCodexLoginMismatch(t *testing.T) {
+	for _, c := range []struct {
+		mode   auth.Mode
+		status string
+		want   []string
+	}{
+		{auth.Subscription, "Logged in using an API key - sk-proj-***12345", []string{"API 密钥登录", "与订阅模式不符", "codex login", "ACO_CODEX_AUTH_MODE"}},
+		{auth.API, "Logged in using ChatGPT", []string{"ChatGPT 登录", "与 API 模式不符", "OPENAI_API_KEY", "ACO_CODEX_AUTH_MODE"}},
+		{auth.Subscription, "Not logged in", []string{"未登录", "codex login"}},
+	} {
+		cs := Run(context.Background(), codexInput(t, c.mode, c.status))
+		m := byID(cs)
+		if m["codex.auth"].Status != Fail || !Failed(cs) {
+			t.Errorf("%s / %q: %+v", c.mode, c.status, m["codex.auth"])
+			continue
+		}
+		zh := i18n.T(i18n.ZhCN, m["codex.auth"].Msg.Key, m["codex.auth"].Msg.Args...)
+		for _, w := range c.want {
+			if !strings.Contains(zh, w) {
+				t.Errorf("%s / %q: %q lacks %q", c.mode, c.status, zh, w)
+			}
+		}
+	}
+}
+
+func TestDoctorCodexProbe(t *testing.T) {
+	in := codexInput(t, auth.Subscription, "Logged in using ChatGPT")
+	in.Codex.Probe = func(context.Context) (*codexreview.ProbeResult, error) {
+		return &codexreview.ProbeResult{Model: "gpt-6.1-sol", ReadOnly: true}, nil
+	}
+	if m := byID(Run(context.Background(), in)); m["codex.probe"].Status != OK {
+		t.Errorf("probe ok: %+v", m["codex.probe"])
+	}
+	in.Codex.Probe = func(context.Context) (*codexreview.ProbeResult, error) {
+		return &codexreview.ProbeResult{Model: "gpt-6.1-sol", ReadOnly: false}, nil
+	}
+	if m := byID(Run(context.Background(), in)); m["codex.probe"].Status != Fail || m["codex.probe"].Msg.Key != i18n.DoctorCodexProbeWritable {
+		t.Errorf("writable sandbox must fail: %+v", m["codex.probe"])
+	}
+	in.Codex.Probe = func(context.Context) (*codexreview.ProbeResult, error) {
+		return nil, &agent.Error{Agent: "codex", Class: agent.ClassCrash, Message: "model not supported"}
+	}
+	if m := byID(Run(context.Background(), in)); m["codex.probe"].Status != Fail {
+		t.Errorf("probe failure: %+v", m["codex.probe"])
+	}
 }

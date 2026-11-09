@@ -35,6 +35,8 @@ type System struct {
 	Getwd     func() (string, error)
 	Exec      doctor.Exec
 	Keychain  auth.KeyStore // nil: no keychain support yet
+	// CodexStatus replaces `codex login status` (tests); nil runs the CLI.
+	CodexStatus func(ctx context.Context, mode auth.Mode) (auth.CodexStatus, error)
 }
 
 // OSSystem returns the real process environment.
@@ -399,6 +401,7 @@ func runDoctor(inv *invocation) int {
 		Repo:       inv.str("repo"),
 		Security:   inv.flagBool("security"),
 		Claude:     inv.claudeDoctor(cfg, res, env),
+		Codex:      inv.codexDoctor(cfg, res, env),
 	})
 
 	p := inv.out

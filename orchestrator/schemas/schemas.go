@@ -20,3 +20,15 @@ var Event []byte
 //
 //go:embed impl-report.schema.json
 var ImplReport []byte
+
+// PlanReview is plan-review.schema.json: the Stage 2 reviewer's answer
+// (Codex --output-schema).
+//
+//go:embed plan-review.schema.json
+var PlanReview []byte
+
+// CodeReview is code-review.schema.json: the Stage 3 and Stage 4
+// reviewer's answer (Codex --output-schema).
+//
+//go:embed code-review.schema.json
+var CodeReview []byte

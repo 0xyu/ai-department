@@ -1,6 +1,6 @@
 // Package agent defines the roles ACO drives through vendor CLIs — Planner
-// (Stage 1) and Implementer (Stages 3–4); the Reviewer follows in Phase 7 —
-// and the types they share: requests, results, usage, budgets, and the error
+// (Stage 1), Implementer (Stages 3–4), and Reviewer (Stages 2–4) — and the
+// types they share: requests, results, usage, budgets, and the error
 // classes of §14.1. Adapters (internal/agent/claudecode) and scripted fakes
 // (internal/agent/fake) implement the interfaces, so the engine is testable
 // offline.
@@ -9,6 +9,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"time"
 
 	"github.com/0xyu/aco/internal/artifacts"
@@ -81,6 +82,8 @@ type Usage struct {
 	Turns               int           `json:"turns"`
 	CostUSD             float64       `json:"cost_usd"` // total_cost_usd (an estimate in subscription mode)
 	Duration            time.Duration `json:"duration"`
+	// ReasoningTokens is the part of OutputTokens spent on reasoning (Codex).
+	ReasoningTokens int64 `json:"reasoning_tokens,omitempty"`
 }
 
 // Add accumulates o into u.
@@ -92,6 +95,7 @@ func (u *Usage) Add(o Usage) {
 	u.Turns += o.Turns
 	u.CostUSD += o.CostUSD
 	u.Duration += o.Duration
+	u.ReasoningTokens += o.ReasoningTokens
 }
 
 // GuardDenial is one tool call the guard hook denied during an invocation.
@@ -117,6 +121,13 @@ type Invocation struct {
 	ResultText string
 	// Artifact paths relative to the run directory.
 	PromptRef, TranscriptRef, StderrRef, SettingsRef, GuardPolicyRef string
+	// OutputRef is the CLI's final message (Codex -o), masked.
+	OutputRef string
+	// Priced is true when CostUSD was computed from a configured price
+	// (Codex in api mode); false means only the token counts are known.
+	Priced bool
+	// Violations are confinement breaches seen in the reviewer's stream.
+	Violations []AccessViolation
 }
 
 // PlanFinding is a plan-review finding sent back for revision (§10.3).
@@ -275,4 +286,22 @@ type ImplResult struct {
 	Invocation
 	Raw    json.RawMessage
 	Report *ImplReport
+}
+
+// PlanPackageFiles returns the files of a plan package for a context pack:
+// the source files byte-for-byte when the package was loaded from disk,
+// otherwise the rendered package (structured planner output).
+func PlanPackageFiles(p *plan.Package) []PackFile {
+	var out []PackFile
+	if len(p.Files) > 0 {
+		for _, f := range p.Files {
+			out = append(out, PackFile{Path: f.Path, Content: string(f.Raw)})
+		}
+		return out
+	}
+	for path, b := range plan.RenderFiles(p) {
+		out = append(out, PackFile{Path: path, Content: string(b)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
 }

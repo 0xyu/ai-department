@@ -1,0 +1,10 @@
+{{define "final_review.tmpl"}}
+{{template "reviewer_rules.tmpl" .}}
+# Task: final review of the whole run (round {{.Round}})
+
+Every phase was reviewed on its own. Now review the complete run diff (run base to HEAD) against the frozen plan and the requirements for what per-phase reviews miss: integration gaps between phases, inconsistent interfaces, duplicated or dead code, leftover TODOs and debug code, missing error handling across boundaries, and security issues in the combined system. Do not repeat per-phase nitpicks.
+{{if .Ledger}}{{template "code_review_ledger.tmpl" .}}{{else}}
+previous_findings must be an empty array: this is the first final review.
+{{end}}{{template "code_review_assess.tmpl" .}}
+{{template "code_review_context.tmpl" .}}
+{{end}}

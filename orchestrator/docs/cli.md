@@ -53,7 +53,7 @@ Loads config, the env file, and resolves auth, then checks in this order:
 | Check ID | Result |
 |---|---|
 | `config.layers` | OK — lists applied config layers |
-| `config.reviewer_model` | WARN when `reviewer.model` is empty |
+| `config.reviewer_model` | INFO — reviewer model, reasoning effort, fallback model |
 | `auth.env_file` | INFO if not found, WARN if group/others can read it (Unix), OK if loaded |
 | `auth.mode.claude`, `auth.mode.codex` | INFO — resolved mode and its source |
 | `auth.fallback` | INFO — fallback and its source |
@@ -61,6 +61,7 @@ Loads config, the env file, and resolves auth, then checks in this order:
 | `tool.git` | FAIL if missing or older than 2.30 |
 | `tool.claude`, `tool.codex` | FAIL if missing or `--version` fails; version shown |
 | `claude.flags`, `claude.effort`, `claude.auth`, `claude.probe` | Claude Code capability, effort, login, and (with `--probe`) a real call; see docs/claude-adapter.md |
+| `codex.flags`, `codex.auth`, `codex.probe` | Codex CLI exec flags (read-only sandbox, `--ephemeral`, `--output-schema`, …); `codex login status` against the resolved mode (subscription: ChatGPT login in `~/.codex`; api: API-key login in `~/.aco/codex-api`); with `--probe` one real review-style call that checks the model, `model_reasoning_effort`, and that the sandbox refuses a file write. A login of the other mode FAILs with what to change. See docs/reviewer.md |
 | `aco_home` | FAIL if `~/.aco` is not writable |
 | `repo` | only with `--repo`: FAIL if not a Git repository |
 | `security` | only with `--security`: placeholder until the security phase |
@@ -68,8 +69,8 @@ Loads config, the env file, and resolves auth, then checks in this order:
 Exit code: 0 when nothing failed (warnings allowed), 3 when any check failed, 2 on config/env/auth errors.
 
 Version probes run with secret environment variables removed and `GIT_TERMINAL_PROMPT=0`. `--probe` makes one small
-real Claude call (it uses a little subscription quota or API budget); without it model availability is not checked.
-Codex checks follow in Phase 7.
+real Claude call and one small real Codex call (they use a little subscription quota or API budget; in api mode the
+Codex probe also logs the dedicated `CODEX_HOME` in); without it model availability is not checked.
 
 ## `aco hook pre-tool-use` (internal)
 

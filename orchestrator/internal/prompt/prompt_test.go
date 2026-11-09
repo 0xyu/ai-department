@@ -24,8 +24,20 @@ func TestEveryTemplateRenders(t *testing.T) {
 			GateFailures: []agent.GateFailure{{ID: "G-unit-1", Gate: "unit", Command: "go test", Log: "FAIL"}}},
 		ReviewFix: agent.ContinueRequest{Phase: 3, ACIDs: []string{"AC-03.1"},
 			Findings: []agent.CodeFinding{{ID: "F-001", Severity: "major", Title: "bug"}}},
-		Continue: agent.ContinueRequest{Reason: "max turns", ACIDs: []string{"AC-03.1"}},
-		FinalFix: agent.ImplementRequest{Kind: agent.KindFinalFix, Attempt: 1, Workspace: ws, Failures: "unit failed"},
+		Continue:      agent.ContinueRequest{Reason: "max turns", ACIDs: []string{"AC-03.1"}},
+		FinalFix:      agent.ImplementRequest{Kind: agent.KindFinalFix, Attempt: 1, Workspace: ws, Failures: "unit failed"},
+		ReviewerRules: PlanReviewPack{ArtifactDir: "/a"},
+		PlanReview: PlanReviewPack{Round: 1, ArtifactDir: "/a", Requirements: "Build X.", ReqIDs: []string{"REQ-001"},
+			Files: []agent.PackFile{{Path: "IMPLEMENTATION_PLAN.md", Content: "# Plan"}}},
+		PlanReReview: PlanReviewPack{Round: 2, ReqIDs: []string{"REQ-001"}, Previous: []agent.PlanFindingRecord{
+			{Finding: agent.PlanFinding{ID: "PF-001", Severity: "major", Title: "t"}, Response: &agent.FindingResponse{ID: "PF-001", Response: "fixed", Detail: "d"}},
+			{Finding: agent.PlanFinding{ID: "PF-002", Severity: "minor", Title: "u"}}}},
+		CodeReview: CodeReviewPack{Phase: 3, Attempt: 1, Round: 1, ACIDs: []string{"AC-03.1"}, Diff: "diff --git a/x b/x",
+			Phases: []agent.PhaseStatus{{Number: 3, Title: "Store", Status: "current"}}},
+		CodeReReview: CodeReviewPack{Phase: 3, Attempt: 1, Round: 2, ACIDs: []string{"AC-03.1"}, DiffPartial: true, FullPatchPath: "/a/full.patch",
+			Ledger: []agent.LedgerEntry{{ID: "F-03-001", State: "open", Severity: "major"}}},
+		FinalReview:      CodeReviewPack{Round: 1, ACIDs: []string{"AC-01.1"}, Requirements: "Build X."},
+		ReviewCorrection: Correction{Problems: []string{"verdict missing"}, Answer: "{}"},
 	}
 	for _, name := range Names {
 		in, ok := inputs[name]

@@ -795,6 +795,14 @@ env = allowlist + credentials for the resolved auth mode only (§16.5);
 - Never used with `--dangerously-bypass-approvals-and-sandbox`, `workspace-write`, `--add-dir`, or `--worktree`.
 - Exact flags and config keys (including `model_reasoning_effort`) are verified by `aco doctor` against the installed Codex version.
 
+As built in Phase 7 (details in `docs/reviewer.md`, verified with codex-cli 0.162.0): the GPT Sol 6.1 model ID is
+`gpt-6.1-sol`. The command also passes `-c web_search="disabled"`, `--ignore-user-config` (the user's `config.toml`
+with MCP servers and notify hooks does not apply), `--ignore-rules` (no user or repository execpolicy rules),
+`--disable` for hooks, plugins, apps, sub-agents, memories, browser/computer use, and similar features the installed
+CLI lists, and on Windows `-c windows.sandbox="unelevated"` (without it the read-only sandbox rejects every command).
+Codex reports no auth source in its JSONL stream, so `codex login status` is checked before every review instead.
+Codex reads global skill files outside the worktree on its own; the read monitor flags this and the review is retried.
+
 ### 16.3 Reviewer confinement
 
 - **Writes and network:** prevented by Codex's `read-only` sandbox; tested in Phase 7 (a review prompt that asks Codex to create a file or reach the network must fail).
@@ -1665,5 +1673,5 @@ Phase 12, Phase 13
 
 ## 22. Open questions
 
-1. The exact Codex model ID for GPT Sol 6.1 (to be filled in config and confirmed by `aco doctor` in Phase 7).
+1. ~~The exact Codex model ID for GPT Sol 6.1.~~ Resolved in Phase 7: `gpt-6.1-sol` (default of `reviewer.model`, confirmed live and by `aco doctor --probe`).
 2. API-mode prices for GPT Sol 6.1 in the `pricing` table (needed for USD budgets on Codex; until set, the token limit applies).

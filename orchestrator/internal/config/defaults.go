@@ -5,9 +5,13 @@ import "time"
 // Default model and role kinds.
 const (
 	DefaultClaudeModel = "claude-opus-5-5"
-	KindClaudeCode     = "claude-code"
-	KindCodexCLI       = "codex-cli"
-	KindFake           = "fake"
+	// DefaultReviewerModel is the Codex model ID of GPT Sol 6.1 (verified
+	// with codex-cli 0.162.0 and a ChatGPT subscription; `aco doctor
+	// --probe` re-checks it).
+	DefaultReviewerModel = "gpt-6.1-sol"
+	KindClaudeCode       = "claude-code"
+	KindCodexCLI         = "codex-cli"
+	KindFake             = "fake"
 )
 
 // Default returns the built-in default configuration (lowest layer).
@@ -28,10 +32,12 @@ func Default() *Config {
 		},
 		Reviewer: ReviewerConfig{
 			Kind:            KindCodexCLI,
-			Model:           "", // GPT Sol 6.1 model ID; set by the operator, verified by `aco doctor` (Phase 7)
+			Model:           DefaultReviewerModel,
 			FallbackModel:   "",
 			ReasoningEffort: "high",
 			FinalReview:     true,
+			WindowsSandbox:  "unelevated",
+			MaxContextBytes: 512 << 10,
 		},
 		Auth: AuthConfig{
 			Mode:     "subscription",

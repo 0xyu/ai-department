@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0xyu/aco/schemas/v1/code-review.schema.json",
+  "title": "ACO code review (v1)",
+  "description": "Stage 3 phase review and Stage 4 final review (implementation plan sections 11.6 and 12.5). Every object lists all of its properties as required and forbids others, so the schema is valid for strict structured output. line_start and line_end are 0 when a finding has no line.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary", "plan_conformance", "acceptance_criteria", "security_assessment", "regression_assessment", "test_assessment", "previous_findings", "new_findings"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["approve", "request_changes"]},
+    "summary": {"type": "string"},
+    "plan_conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "notes"],
+      "properties": {
+        "status": {"type": "string", "enum": ["conforms", "deviates"]},
+        "notes": {"type": "string"}
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string", "enum": ["met", "partial", "not_met", "not_verifiable"]},
+          "evidence": {"type": "string"}
+        }
+      }
+    },
+    "security_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "notes"],
+      "properties": {
+        "status": {"type": "string", "enum": ["no_issues", "issues_found"]},
+        "notes": {"type": "string"}
+      }
+    },
+    "regression_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["risk", "notes"],
+      "properties": {
+        "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+        "notes": {"type": "string"}
+      }
+    },
+    "test_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adequate", "notes"],
+      "properties": {
+        "adequate": {"type": "boolean"},
+        "notes": {"type": "string"}
+      }
+    },
+    "previous_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "note"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string", "enum": ["resolved", "unresolved", "partially_resolved", "dispute_accepted", "dispute_rejected"]},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "new_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "resolution_class", "file", "line_start", "line_end", "title", "description", "evidence", "required_change"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["blocker", "major", "minor", "nit"]},
+          "category": {"type": "string", "enum": ["correctness", "security", "regression", "tests", "spec_mismatch", "scope_violation", "agents_md_violation", "maintainability", "performance", "out_of_scope", "prompt_injection"]},
+          "resolution_class": {"type": "string", "enum": ["fixable", "spec_conflict", "unsafe", "environment", "deferred"]},
+          "file": {"type": "string"},
+          "line_start": {"type": "integer"},
+          "line_end": {"type": "integer"},
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "evidence": {"type": "string"},
+          "required_change": {"type": "string"}
+        }
+      }
+    }
+  }
+}

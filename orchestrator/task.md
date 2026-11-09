@@ -10,7 +10,7 @@
 | Phase 4 | Git 管理 | 已完成（三平台 CI 与 `-race` 尚未运行验证） |
 | Phase 5 | Claude Code 适配器 | 已完成（订阅模式实测通过；API 模式实测、三平台 CI 与 `-race` 尚未运行） |
 | Phase 6 | 质量门执行器 | 已完成（staticcheck/gosec/govulncheck 本次未运行；三平台 CI 与 `-race` 尚未运行） |
-| Phase 7 | 基于 Codex CLI 的 GPT 评审 | 未开始 |
+| Phase 7 | 基于 Codex CLI 的 GPT 评审 | 已完成（订阅模式实测通过；API 模式实测、staticcheck/gosec/govulncheck、三平台 CI 与 `-race` 尚未运行） |
 | Phase 8 | 第 1、2 阶段流水线 | 未开始 |
 | Phase 9 | 第 3 阶段单阶段引擎 | 未开始 |
 | Phase 10 | 运行生命周期与恢复 | 未开始 |
@@ -193,11 +193,43 @@
 - 测试：三个夹具的六类质量门自动检测与预检；解析优先级、预检问题、全项目模式；每种解析器；已有失败不阻断、回归按名称列出（AC-06.2）；npm audit 新增 high 漏洞失败、已有漏洞只报告、阈值切换（AC-06.3）；挂起命令超时被结束、命令不存在归为 environment（AC-06.4）；2 MB 日志裁剪后保留第一处失败（AC-06.5）；子进程环境不含凭据、日志脱敏；无结构输出的基线比较；fail-fast 与不适用；扫描器报告目录；真实 Git 仓库上的差异策略、密钥扫描和历史扫描。`-tags=integration` 的 `TestGoFixtureEndToEnd` 用真实 Go 工具链在 Go 夹具上跑完整流程：基线轮次、无变化时通过、`TestAdd` 回归被列出、编译错误使 typecheck/build/unit 失败。
 - 本机已运行：`gofmt`、`go vet`（默认与 integration 标签，以及 GOOS=linux/darwin 交叉检查）、全部单元测试、`internal/gates` 的 integration 测试、`CGO_ENABLED=0 go build`。staticcheck、gosec、govulncheck 本机未安装，下载被拒绝，本次未运行。
 
+## Phase 7 完成内容
+
+详见 [docs/reviewer.md](docs/reviewer.md)。以 codex-cli 0.162.0 实测核对了参数、JSONL 事件、登录状态输出和错误文本；GPT Sol 6.1 在 Codex 中的模型 ID 为 `gpt-6.1-sol`（现为 `reviewer.model` 默认值，§22 第 1 个开放问题已解决）。
+
+- `internal/agent`：新增 `Reviewer` 接口（`ReviewPlan`、`ReviewCode`），评审请求/结果类型（计划评审、阶段评审、复审、最终评审），`PlanReview`/`CodeReview` 结构及校验：未知字段、枚举、每个需求恰好一条覆盖、每个 AC 恰好一次评估、每个旧问题恰好一个状态、八个维度各评一次、问题文件必须是相对路径。结论与细节矛盾时（如 approve 但 AC 未满足）仍接受评审，并在 `Inconsistent` 中列出，供引擎发出 `review.inconsistent`。新增错误类别 `schema_invalid`、`policy_violation`；`agent.Error.Calls` 保留多次调用的用量。
+- `schemas/plan-review.schema.json`、`schemas/code-review.schema.json`：严格结构化输出格式（每个对象列出全部属性为必填并禁止额外属性），测试保证与 Go 类型和枚举一致；实测被 Codex `--output-schema` 接受。
+- `internal/agent/codexreview`：
+  - 命令构建（黄金文件测试）：`codex exec -m <model> -c model_reasoning_effort=… -c web_search="disabled" --disable <功能>… --ignore-user-config --ignore-rules -C <工作树> --sandbox read-only --ephemeral --json --output-schema … -o … -`。只关闭 `codex features list` 中存在的功能（未知名称会让 Codex 直接失败）；Windows 上加 `-c windows.sandbox="unelevated"`（实测：不加时只读沙箱拒绝所有命令）。`CheckArgs` 拒绝一切可写或绕过沙箱的参数和 `-c` 覆盖（有测试）。
+  - 上下文包经 stdin 传入，写入产物；提示词模板：评审规则、计划评审、计划复审、代码评审、代码复审、最终评审、格式纠正。超过 `reviewer.max_context_bytes`（默认 512 KiB）时：完整补丁写入产物目录并给出路径，包内保留 diff 统计和按风险排序的代码块；其他大段内容截短并指向完整文件；计划、阶段规格和 AGENTS.md 始终原文保留。
+  - JSONL 解析（容忍未知事件和字段）：线程 ID、命令、文件修改、工具调用、警告、错误、token 用量；Codex 提示忽略 `model_reasoning_effort` 时调用失败。
+  - 读取监控（§16.3）：检查每条命令（含 `bash -c`、`powershell -Command`、`cmd /c` 内的脚本），工作树和运行产物目录之外、位于用户主目录下或实际存在的路径记为违规；`~`、`$HOME`、`$env:USERPROFILE`、`%USERPROFILE%` 等展开为主目录，其他变量拼出的路径一律违规；跟踪 `cd`，检查指向外部的符号链接；任何文件修改或工具调用（MCP、网页搜索、浏览器等）都是违规。发现违规立即结束进程树，丢弃该评审并重试一次，再次违规返回 `policy_violation`。实测发现：Codex 会自行读取全局技能文件（`~/.agents/skills/…`），没有配置项可关闭；规则中已禁止，仍读取时由监控拦截（录制夹具 `recorded_skill_read.jsonl`）。
+  - 重试：格式不合规时带校验错误重试（最多 2 次），之后换 `reviewer.fallback_model`（同一认证模式），仍失败为 `schema_invalid`；transient 和 429 指数退避（参考 CLI 给出的等待时间，最多 4 次）。
+  - 错误分类：transient、subscription_limit（解析"try again in 2 hours 13 minutes"和"try again at 3:05 PM / Nov 10th, 2026 3:05 PM"）、api_rate_limit（含等待时间）、api_quota、auth、crash（含未知模型）、timeout、cancelled、budget_exceeded、schema_invalid、policy_violation。
+  - API 模式费用：输入 token × `input_per_mtok` + 输出 token × `output_per_mtok`，计入 USD 预算；未配置价格时只记录 token（`Priced=false`）。
+  - `Probe`：在临时目录中真实调用一次，验证登录、模型、`model_reasoning_effort`、输出 Schema，并确认沙箱拒绝写文件（必须确实执行过写命令）。
+- `internal/auth`（Codex 部分）：Codex 子进程环境（去掉 `OPENAI_API_KEY`、`CODEX_API_KEY`、`OPENAI_BASE_URL`、`CODEX_ACCESS_TOKEN`、所有 `ANTHROPIC_*`/`CLAUDE_*`、疑似密钥和 `ACO_*`；订阅模式保留用户的 `CODEX_HOME`，API 模式设为专用目录）；`codex login status` 解析与模式校验；API 模式在 `~/.aco/codex-api/` 用 `codex login --with-api-key`（密钥只经 stdin）登录，按 Codex 显示的掩码判断是否需要重新登录，拒绝把 `~/.codex` 当作专用目录。每次评审前都校验登录方式。质量门环境同样去掉上述 Codex 变量。
+- `internal/apidiff`（新包）：解析统一 diff，并以启发式提取 Go、TypeScript/JavaScript、Python 中新增、删除、修改的公开 API（作为回归数据放入上下文包）。
+- `internal/agent/fake`：脚本化评审器 `fake.Reviewer`（按真实适配器的方式校验脚本中的最终消息），以及 `PlanReviewPass`、`CodeReviewApprove` 辅助函数。
+- `aco doctor`：新增 `codex.flags`、`codex.auth`（登录方式与解析出的模式不符时失败，并用简体中文说明如何修改）、`codex.probe`（仅 `--probe`）；`config.reviewer_model` 改为信息行。
+- 配置：`reviewer.model` 默认 `gpt-6.1-sol` 且为必填；新增 `reviewer.windows_sandbox`（`unelevated`|`elevated`）和 `reviewer.max_context_bytes`（≥ 64 KiB）。
+- 测试：伪造 CLI（测试二进制自身）播放 JSONL 夹具：合规评审、先不合规后合规、备用模型、结论矛盾、带重置时间的用量上限（两种格式）、未登录（实录）、读取 `~/.ssh/id_rsa`、实录的技能文件读取、文件修改、transient、429、额度不足、effort 被忽略、未知模型（实录）；命令行与两种上下文包的黄金文件；大 diff 的大小上限；订阅/API 两种子进程环境；API 模式下 `~/.codex` 文件哈希不变、密钥不出现在任何产物中；登录方式不符时不会执行 `exec`；空闲超时；预算用完；监控规则表（Unix 与 Windows 规则）；错误分类与重置时间；Schema 与 Go 类型同步。`-tags=integration`：真实 CLI 的参数和功能检测、用假密钥登录临时专用目录。`-tags=live`（`ACO_LIVE_CODEX=1`）：只读沙箱无法写文件、缺失覆盖的需求被标为 `missing`、植入的 SQL 注入被报告为 `security` blocker（`store/users.go`）。
+- 本机已运行：`gofmt`、`go vet`（默认、integration、live 标签，以及 GOOS=linux/darwin 交叉检查）、全部单元测试、`internal/agent/codexreview` 的 integration 测试、订阅模式 live 测试（3 项全部通过）、`CGO_ENABLED=0 go build`、依赖检查（无厂商 SDK）、真实环境下的 `aco doctor`。staticcheck、gosec、govulncheck 本机未安装，下载被权限策略拒绝，本次未运行。
+
+## 代码评审修复（Phase 7）
+
+- 读取监控：普通相对路径参数（不只是绝对路径和 `..`）也按命令中跟踪的工作目录解析；路径中任一部分是符号链接或 Windows 目录联接（junction）时解析其目标（自实现的解析器，用 `os.Readlink`；Go 1.23 起 `filepath.EvalSymlinks` 不再跟随 junction），目标在允许目录之外即违规；同时按名称和文件系统标识（`os.SameFile`，可匹配 8.3 短名）比较；无法解析的链接按违规处理。新增真实文件系统的回归测试：经链接目录/junction 读取、`cd` 进入链接目录、相对文件符号链接（Windows 无权限时跳过，Linux/macOS 上执行）、工作树内正常读取、指向工作树内部的链接；适配器层验证违规评审被丢弃并只重试一次。
+- `-o` 原始输出：改写到每次调用私有的临时目录（运行产物目录之外），任何退出路径都会删除；最多读取 4 MiB（超出按格式不合规处理）；只通过脱敏的产物写入器发布。转录也逐行用适配器的脱敏器处理。伪造 CLI 测试证明哨兵密钥在成功、处理失败（非 JSON、超大消息）和发布失败时都不会出现在任何产物中，且临时文件已删除。
+- API 模式专用目录：在任何 API 模式的 `login status`、`login`、`exec` 之前检查（放在构建子进程环境处）：不得与 `~/.codex` 或订阅模式配置的 `CODEX_HOME` 相同、包含或被包含——按名称、解析链接/junction（含父目录别名）后、以及文件系统标识比较；专用目录本身是链接、不是目录或无法解析时一律拒绝（`ErrUnsafeAPIHome`，类别 `auth`）。测试覆盖：指向 `~/.codex` 的别名、父目录别名、位于 `~/.codex` 内、配置的 `CODEX_HOME` 及其别名、专用目录本身是链接；均证明未运行 login/exec 且用户凭据文件哈希不变。
+- 评审 JSON 先按内嵌 Schema 完整校验（嵌套必填字段、必填处不得为 null、类型、整数、枚举、未知字段；遇到未实现的 Schema 关键字时直接报错，避免静默跳过），再做与请求相关的语义检查。新增 `test_assessment: {}`、必填数组为 null 等测试，并验证这类输出进入现有的格式重试流程；结论矛盾但格式合规的评审仍交给决策门。
+- 转录写入错误：JSONL 超过产物大小上限（或写入失败）时立即停止调用并返回明确错误（`crash`），不保存不完整的 `transcript.jsonl`，改写 `transcript.incomplete.txt` 说明原因；错误中保留会话、用量、提示词等调用元数据。新增溢出回归测试。
+
 ## 已知事项
 
 - Phase 2 时本机无法下载 staticcheck；Phase 3 时已可下载并运行，整个代码库无问题。三平台 CI 仍需在 GitHub 上验证。符号链接相关测试在 Windows 上用 junction，在 Linux/macOS 上用符号链接，后者尚未在本机运行。
 - 系统钥匙串只预留了 `auth.KeyStore` 接口，暂无实现。
-- `reviewer.model` 默认为空（GPT Sol 6.1 的 Codex 模型 ID 待定，见 §22），`doctor` 会给出警告。
+- ~~`reviewer.model` 默认为空~~：Phase 7 已确定为 `gpt-6.1-sol`。
+- Phase 7：API 模式的 Codex live 测试本机没有 `OPENAI_API_KEY`，未运行（`ACO_LIVE_AUTH_MODE=api` 可运行）；API 模式的专用目录登录只用假密钥做过 integration 测试。读取监控是基于命令文本的启发式检查，无法解析 `$(…)` 命令替换等情况，严格隔离依赖 Phase 12 的容器模式。Codex 在 `--ephemeral` 下仍会向 `CODEX_HOME` 写入状态文件（订阅模式即用户的 `~/.codex`）。
 - 本机没有 gcc，`-race` 测试只能在 CI 上运行。
 - Phase 5：API 模式的 live 测试本机没有 `ANTHROPIC_API_KEY`，未运行（`ACO_LIVE_AUTH_MODE=api` 可运行）；Linux/macOS 上的进程组终止只做了交叉编译检查，尚未实际运行。
 - guard 是策略检查，不是沙箱：允许运行的程序（测试、构建脚本）仍可做其操作系统用户能做的一切；隔离边界是 Phase 12 的容器模式。

@@ -51,6 +51,12 @@ type ReviewerConfig struct {
 	FallbackModel   string `yaml:"fallback_model"`
 	ReasoningEffort string `yaml:"reasoning_effort"`
 	FinalReview     bool   `yaml:"final_review"`
+	// WindowsSandbox is Codex's windows.sandbox on Windows: unelevated |
+	// elevated. The read-only sandbox needs one to run any command.
+	WindowsSandbox string `yaml:"windows_sandbox"`
+	// MaxContextBytes caps the context pack on stdin (§16.3); larger
+	// diffs are passed as artifact files.
+	MaxContextBytes int `yaml:"max_context_bytes"`
 }
 
 // AuthConfig holds auth-mode defaults. Environment variables and flags

@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"t-link"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc 'cat linkdir/id_rsa'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc 'cat linkdir/id_rsa'","aggregated_output":"KEY","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\"verdict\": \"approve\", \"summary\": \"The change implements the calculator.\", \"plan_conformance\": {\"status\": \"conforms\", \"notes\": \"matches P01\"}, \"acceptance_criteria\": [{\"id\": \"AC-01.1\", \"status\": \"met\", \"evidence\": \"TestAdd in calc_test.go\"}, {\"id\": \"AC-01.2\", \"status\": \"met\", \"evidence\": \"TestAdd in calc_test.go\"}], \"security_assessment\": {\"status\": \"no_issues\", \"notes\": \"no input handling\"}, \"regression_assessment\": {\"risk\": \"low\", \"notes\": \"new code only\"}, \"test_assessment\": {\"adequate\": true, \"notes\": \"unit tests cover both criteria\"}, \"previous_findings\": [], \"new_findings\": []}"}}
+{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":5,"reasoning_output_tokens":0}}

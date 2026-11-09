@@ -1,0 +1,11 @@
+{{define "review_correction.tmpl"}}
+# Correction: your previous answer was rejected
+
+Your previous answer did not satisfy the output contract. Problems found by the orchestrator:
+{{range .Problems}}- {{.}}
+{{end}}
+Your previous answer (for reference):
+{{data "rejected_answer" .Answer}}
+
+Answer again with one complete JSON object that fixes every problem above and still follows all instructions of the review below. Do not explain; return only the JSON.
+{{end}}

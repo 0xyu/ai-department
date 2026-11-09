@@ -1,0 +1,3 @@
+{"type":"thread.started","thread_id":"t8"}
+{"type":"turn.started"}
+{"type":"turn.failed","error":{"message":"unexpected status 429 Too Many Requests: You exceeded your current quota, please check your plan and billing details. code: insufficient_quota"}}

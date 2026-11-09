@@ -33,6 +33,13 @@ const (
 	ClassBudget ErrorClass = "budget_exceeded"
 	// ClassCancelled: the context was cancelled; the process tree was killed.
 	ClassCancelled ErrorClass = "cancelled"
+	// ClassSchemaInvalid: the reviewer's answer failed the review schema
+	// after the retries with validation errors and the fallback model
+	// (§14.1 malformed review). The attempt is exhausted.
+	ClassSchemaInvalid ErrorClass = "schema_invalid"
+	// ClassPolicy: the reviewer read outside its confinement, wrote, or used
+	// a tool it may not (§16.3); the review was discarded, also on retry.
+	ClassPolicy ErrorClass = "policy_violation"
 )
 
 // Retryable reports whether the engine may retry the same step automatically.
@@ -54,7 +61,10 @@ type Error struct {
 	// Invocation holds what is known about the failed call (session ID for
 	// resume, usage so far, artifact refs).
 	Invocation Invocation
-	Err        error
+	// Calls are all calls of an operation that made several (reviewer
+	// retries), so their usage is not lost when it fails.
+	Calls []Invocation
+	Err   error
 }
 
 func (e *Error) Error() string {

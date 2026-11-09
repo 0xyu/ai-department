@@ -18,6 +18,7 @@ import (
 
 	"github.com/0xyu/aco/internal/agent"
 	"github.com/0xyu/aco/internal/agent/claudecode"
+	"github.com/0xyu/aco/internal/agent/codexreview"
 	"github.com/0xyu/aco/internal/auth"
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/i18n"
@@ -63,6 +64,18 @@ type Input struct {
 	Security   bool   // --security
 	// Claude enables the Claude Code checks (flags, effort, login, probe).
 	Claude *ClaudeInput
+	// Codex enables the Codex CLI checks (flags, login, probe).
+	Codex *CodexInput
+}
+
+// CodexInput configures the Codex CLI checks (§13 preflight, §16.5).
+type CodexInput struct {
+	Mode    auth.Mode
+	APIHome string // dedicated CODEX_HOME (api mode)
+	// Status runs `codex login status` for the resolved mode's home.
+	Status func(ctx context.Context) (auth.CodexStatus, error)
+	// Probe makes one real call (aco doctor --probe); nil skips it.
+	Probe func(ctx context.Context) (*codexreview.ProbeResult, error)
 }
 
 // ClaudeInput configures the Claude Code checks (§13 preflight).
@@ -101,8 +114,14 @@ func Run(ctx context.Context, in Input) []Check {
 			}
 		}
 		add("config.layers", OK, i18n.DoctorConfigLayers, strings.Join(parts, ", "))
-		if in.Config.Config.Reviewer.Model == "" {
+		if rv := in.Config.Config.Reviewer; rv.Model == "" {
 			add("config.reviewer_model", Warn, i18n.DoctorReviewerModelEmpty)
+		} else {
+			fb := rv.FallbackModel
+			if fb == "" {
+				fb = "-"
+			}
+			add("config.reviewer_model", Info, i18n.DoctorReviewerModel, rv.Model, rv.ReasoningEffort, fb)
 		}
 	}
 
@@ -147,7 +166,11 @@ func Run(ctx context.Context, in Input) []Check {
 	if in.Claude != nil && claudeTool.Status != Fail {
 		out = append(out, claudeChecks(ctx, in.Exec, *in.Claude)...)
 	}
-	out = append(out, toolCheck(ctx, in.Exec, "codex", []string{"--version"}, nil))
+	codexTool := toolCheck(ctx, in.Exec, "codex", []string{"--version"}, nil)
+	out = append(out, codexTool)
+	if in.Codex != nil && codexTool.Status != Fail {
+		out = append(out, codexChecks(ctx, in.Exec, *in.Codex)...)
+	}
 
 	// ~/.aco writable.
 	if err := checkWritable(in.ACOHome); err != nil {
@@ -401,4 +424,82 @@ func subscriptionMethod(m string) bool {
 		return true
 	}
 	return false
+}
+
+// codexChecks verifies the installed Codex CLI: the exec flags ACO needs
+// (read-only sandbox, ephemeral sessions, output schema), the login of the
+// resolved mode, and optionally a probe call (model, reasoning effort,
+// sandbox).
+func codexChecks(ctx context.Context, ex Exec, ci CodexInput) []Check {
+	var out []Check
+	add := func(id string, st Status, key i18n.Key, args ...any) {
+		out = append(out, Check{ID: id, Status: st, Msg: i18n.M(key, args...)})
+	}
+	red := secure.NewRedactor()
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	v, _ := ex.Output(cctx, "", "codex", "--version")
+	h, err := ex.Output(cctx, "", "codex", "exec", "--help")
+	if err != nil {
+		add("codex.flags", Fail, i18n.DoctorCodexHelpError, firstLine(red.String(err.Error())))
+		return out
+	}
+	f, _ := ex.Output(cctx, "", "codex", "features", "list")
+	caps := codexreview.ParseCapabilities(v, h, f)
+	if m := caps.Missing(); len(m) > 0 {
+		add("codex.flags", Fail, i18n.DoctorCodexFlagsMissing, caps.Version, strings.Join(m, ", "))
+	} else {
+		add("codex.flags", OK, i18n.DoctorCodexFlagsOK, caps.Version)
+	}
+
+	if ci.Status != nil {
+		st, err := ci.Status(cctx)
+		switch {
+		case err != nil:
+			add("codex.auth", Warn, i18n.DoctorCodexAuthUnknown, firstLine(red.String(err.Error())))
+		case ci.Mode == auth.API:
+			switch st.Login {
+			case auth.CodexLoginAPIKey:
+				add("codex.auth", OK, i18n.DoctorCodexAuthAPI, ci.APIHome)
+			case auth.CodexLoginNone:
+				add("codex.auth", Info, i18n.DoctorCodexAPIHomeNew, ci.APIHome)
+			case auth.CodexLoginChatGPT:
+				add("codex.auth", Fail, i18n.DoctorCodexAPIWrong, ci.APIHome)
+			default:
+				add("codex.auth", Warn, i18n.DoctorCodexAuthUnknown, st.Line)
+			}
+		default:
+			switch st.Login {
+			case auth.CodexLoginChatGPT:
+				add("codex.auth", OK, i18n.DoctorCodexAuthSub)
+			case auth.CodexLoginNone:
+				add("codex.auth", Fail, i18n.DoctorCodexNotLoggedIn)
+			case auth.CodexLoginAPIKey:
+				add("codex.auth", Fail, i18n.DoctorCodexSubWrong)
+			default:
+				add("codex.auth", Warn, i18n.DoctorCodexAuthUnknown, st.Line)
+			}
+		}
+	}
+
+	if ci.Probe == nil {
+		add("codex.probe", Info, i18n.DoctorCodexProbeSkipped)
+		return out
+	}
+	res, err := ci.Probe(ctx)
+	if err != nil {
+		class := "error"
+		var ae *agent.Error
+		if errors.As(err, &ae) {
+			class = string(ae.Class)
+		}
+		add("codex.probe", Fail, i18n.DoctorCodexProbeFail, class, firstLine(red.String(err.Error())))
+		return out
+	}
+	if !res.ReadOnly {
+		add("codex.probe", Fail, i18n.DoctorCodexProbeWritable)
+		return out
+	}
+	add("codex.probe", OK, i18n.DoctorCodexProbeOK, res.Model)
+	return out
 }

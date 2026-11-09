@@ -1,0 +1,42 @@
+{{define "plan_review_body.tmpl"}}
+Rate every dimension exactly once ("sound", "concerns", or "unsound"):
+- architecture: is the design sound, consistent with the existing codebase, appropriately modular?
+- technical_approach: are libraries, patterns, and data models appropriate? Hidden complexity?
+- coverage: is every requirement covered by phases and testable acceptance criteria? Anything invented that was not asked?
+- dependencies: is the phase order correct? Does any phase depend on later work? Are external dependencies identified?
+- risks: are major risks identified with mitigations (security, data loss, performance, migration)?
+- phase_quality: is each phase small enough for one implementation session, independently verifiable, with a clear scope?
+- acceptance_criteria: are the criteria specific, testable by the declared gates, and sufficient?
+- quality_gates: are all six gate types (typecheck, lint, unit, integration, build, security) configured or justified as not applicable?
+
+List every requirement exactly once in requirement_coverage ({{join .ReqIDs ", "}}): "covered" only when phases and testable acceptance criteria fully cover it, "partial" when something is missing, "missing" when nothing covers it. Name the covering phases (P01, P02, ...).
+
+Report each problem as a new finding with a location (a plan file and section, for example phases/P03.md#acceptance-criteria) and the concrete required change. Set verdict "pass" only when there is no blocker or major finding, no dimension is unsound, and every requirement is covered.
+
+## Requirements
+{{data "requirements" .Requirements}}
+
+## Plan package
+{{range .Files}}{{data .Path .Content}}
+
+{{else}}(no files)
+{{end}}{{range .Omitted}}- {{.What}}: not inlined (size cap); read it at {{.Path}}
+{{end}}
+## Repository overview
+{{data "repository_overview" .RepoOverview}}
+
+## AGENTS.md
+{{data "AGENTS.md" .AgentsMD}}
+
+## Deterministic plan checks (computed by the orchestrator)
+{{data "plan_checks" .CheckResults}}
+{{end}}
+
+{{define "plan_review.tmpl"}}
+{{template "reviewer_rules.tmpl" .}}
+# Task: review the implementation plan
+
+Review the plan package below for the requirements. It will be frozen and implemented phase by phase without a human, so gaps found now are cheap and gaps found later are expensive.
+{{template "plan_review_body.tmpl" .}}
+previous_findings must be an empty array: this is the first review.
+{{end}}

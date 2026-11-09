@@ -110,8 +110,8 @@ func TestChildEnvExtraRejectsSecrets(t *testing.T) {
 		Extra: []string{"SOME_TOKEN=x"}}); err == nil {
 		t.Error("secret var accepted as extra")
 	}
-	if _, err := ChildEnv(ChildEnvInput{Agent: Codex, Mode: Subscription}); !errors.Is(err, ErrUnsupportedAgent) {
-		t.Error("codex child env is Phase 7")
+	if _, err := ChildEnv(ChildEnvInput{Agent: "other", Mode: Subscription}); !errors.Is(err, ErrUnsupportedAgent) {
+		t.Error("unknown agent accepted")
 	}
 }
 

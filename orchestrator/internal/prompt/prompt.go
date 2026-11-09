@@ -33,7 +33,8 @@ const (
 )
 
 // Names lists every template.
-var Names = []string{PlannerSystem, ImplementerSystem, PlanCreate, PlanRevise, PhaseImplement, GateFix, ReviewFix, Continue, FinalFix}
+var Names = []string{PlannerSystem, ImplementerSystem, PlanCreate, PlanRevise, PhaseImplement, GateFix, ReviewFix, Continue, FinalFix,
+	ReviewerRules, PlanReview, PlanReReview, CodeReview, CodeReReview, FinalReview, ReviewCorrection}
 
 //go:embed templates/*.tmpl
 var files embed.FS

@@ -22,6 +22,7 @@ var (
 	NetworkModes       = []string{"deny", "allowlist", "allow"}
 	MergeModes         = []string{"none", "ff-only"}
 	SandboxModes       = []string{"host", "docker"}
+	WindowsSandboxes   = []string{"unelevated", "elevated"}
 	plannerKinds       = []string{KindClaudeCode, KindFake}
 	reviewerKinds      = []string{KindCodexCLI, KindFake}
 	optionalAuthModes  = []string{"", "subscription", "api"}
@@ -47,6 +48,11 @@ func Validate(c *Config) Errors {
 
 	v.oneOf("reviewer.kind", c.Reviewer.Kind, reviewerKinds)
 	v.oneOf("reviewer.reasoning_effort", c.Reviewer.ReasoningEffort, ReasoningEfforts)
+	v.required("reviewer.model", c.Reviewer.Model)
+	v.oneOf("reviewer.windows_sandbox", c.Reviewer.WindowsSandbox, WindowsSandboxes)
+	if c.Reviewer.MaxContextBytes < 64<<10 {
+		v.add(FieldError{Field: "reviewer.max_context_bytes", Code: ErrOutOfRange, Value: fmt.Sprint(c.Reviewer.MaxContextBytes), Allowed: ">= 65536"})
+	}
 
 	v.oneOf("auth.mode", c.Auth.Mode, AuthModes)
 	v.oneOfLegend("auth.claude", c.Auth.Claude, optionalAuthModes, optionalAuthLegend)

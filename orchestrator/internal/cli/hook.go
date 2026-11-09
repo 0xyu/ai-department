@@ -2,12 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
 	"time"
 
 	"github.com/0xyu/aco/internal/agent/claudecode"
+	"github.com/0xyu/aco/internal/agent/codexreview"
 	"github.com/0xyu/aco/internal/auth"
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/doctor"
@@ -92,6 +94,26 @@ func (inv *invocation) claudeDoctor(cfg *config.Config, res *auth.Resolution, en
 			opts.BaseEnv = inv.sys.Environ()
 		}
 		a := claudecode.New(opts)
+		ci.Probe = a.Probe
+	}
+	return ci
+}
+
+// codexDoctor configures doctor's Codex CLI checks; --probe adds a real call.
+func (inv *invocation) codexDoctor(cfg *config.Config, res *auth.Resolution, env *auth.Env) *doctor.CodexInput {
+	acoHome := doctor.DefaultACOHome(inv.sys.home())
+	opts := codexreview.OptionsFromConfig(cfg, res.Codex.Mode, env, inv.redactor, acoHome, inv.sys.home())
+	opts.Keys = inv.sys.Keychain
+	if inv.sys.Environ != nil {
+		opts.BaseEnv = inv.sys.Environ()
+	}
+	a := codexreview.New(opts)
+	ci := &doctor.CodexInput{Mode: res.Codex.Mode, APIHome: opts.APIHome, Status: a.LoginStatus}
+	if inv.sys.CodexStatus != nil {
+		mode := res.Codex.Mode
+		ci.Status = func(ctx context.Context) (auth.CodexStatus, error) { return inv.sys.CodexStatus(ctx, mode) }
+	}
+	if inv.flagBool("probe") {
 		ci.Probe = a.Probe
 	}
 	return ci
