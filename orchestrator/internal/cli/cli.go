@@ -26,6 +26,7 @@ import (
 
 // System is the process environment the CLI runs in (injectable for tests).
 type System struct {
+	Stdin     io.Reader
 	Stdout    io.Writer
 	Stderr    io.Writer
 	LookupEnv func(string) (string, bool)
@@ -39,6 +40,7 @@ type System struct {
 // OSSystem returns the real process environment.
 func OSSystem() System {
 	return System{
+		Stdin:     os.Stdin,
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 		LookupEnv: os.LookupEnv,
@@ -396,6 +398,7 @@ func runDoctor(inv *invocation) int {
 		ACOHome:    doctor.DefaultACOHome(inv.sys.home()),
 		Repo:       inv.str("repo"),
 		Security:   inv.flagBool("security"),
+		Claude:     inv.claudeDoctor(cfg, res, env),
 	})
 
 	p := inv.out

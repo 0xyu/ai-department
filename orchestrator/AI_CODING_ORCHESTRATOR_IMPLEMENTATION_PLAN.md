@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| Status | Draft v2.3 (Phases 1–3 implemented) |
+| Status | Draft v2.4 (Phases 1–5 implemented) |
 | Language | Go |
 | Binary | `aco` |
 | Date | 2026-11-07 |
 | Changes since v1.0 | Added Stage 1 (Plan Creation), Stage 2 (Independent Plan Review, Plan Decision Gate, Plan Freeze) and Stage 4 (Final Verification); AGENTS.md loading; phase dependency checks; Claude effort setting; six explicit quality gates incl. security scanning; regression analysis; finding triage; BLOCKED state; reviewed-tree-only commits; mandatory Phase Completion Reports; Final Development Report. Phases renumbered 1–14. |
 | Changes since v2.0 | **CLI-only model access:** Claude via Claude Code CLI, GPT (GPT Sol 6.1) via Codex CLI; no direct HTTP API calls or vendor SDKs. Usage limits (agent calls, turns, wall-clock) added. Open questions resolved (§21). Operator-facing messages in Simplified Chinese; documents, reports, prompts, and commits in English. |
 | Changes since v2.1 | **Dual auth mode selected by env:** each CLI runs in `subscription` mode (default) or `api` mode (API key, pay-as-you-go), set by `ACO_AUTH_MODE` with per-agent overrides and optional subscription→API fallback (§16.5). USD budgets apply in API mode. |
+| Changes since v2.3 | **Phase 5 as built (Claude Code 2.1.311 verified):** §16.2 profiles updated — planner uses `--permission-mode dontAsk` and `--tools Read,Glob,Grep`; both profiles use `--setting-sources ""`, `--strict-mcp-config`, `--permission-prompts none`, and `--include-hook-events` (the adapter verifies the guard hook ran); schemas are passed without their root `$schema`. Effort level `xhigh` accepted. |
 | Changes since v2.2 | **Plan-format compliance:** numbered requirement list (§4.1, `REQ-001`–`REQ-030`), a Requirements section mapping each phase's requirements to the AC that verify them, and all six Quality Gates per phase, so `aco validate-plan` accepts this document. |
 
 ACO is a standalone program that turns a requirement into a reviewed, frozen Implementation Plan and then executes that plan phase by phase with no human in the loop:
@@ -733,10 +734,15 @@ Stage 1 planning (read-only):
 
 ```
 claude -p --output-format stream-json --verbose
-  --session-id <uuid> --model claude-opus-5-5 --effort high
-  --permission-mode plan  (or write tools in --disallowedTools)
-  --allowedTools "Read Glob Grep"
+  --session-id <uuid> (Create) | --resume <uuid> (Revise)
+  --model claude-opus-5-5 --effort high
+  --permission-mode dontAsk
+  --tools Read,Glob,Grep  --allowedTools Read,Glob,Grep
+  --disallowedTools Write,Edit,MultiEdit,NotebookEdit,Bash,PowerShell,WebFetch,WebSearch,Task
+  --setting-sources "" --strict-mcp-config
+  --settings <generated settings.json: PreToolUse hook → `aco hook pre-tool-use`>
   --json-schema <plan package schema>
+  --max-turns <limits.claude_max_turns> --include-hook-events --permission-prompts none
   --append-system-prompt <planner rules>
 ```
 
@@ -749,15 +755,24 @@ claude -p --output-format stream-json --verbose
   --json-schema <impl-report schema>
   --max-turns <limits.claude_max_turns>
   --permission-mode acceptEdits
-  --allowedTools  "Read Edit Write Glob Grep TodoWrite Bash(<allowed prefixes>)"
-  --disallowedTools "WebFetch WebSearch Bash(git commit:*) Bash(git push:*) …"
+  --tools Read,Edit,Write,Glob,Grep,Bash
+  --allowedTools  "Read,Edit,Write,Glob,Grep,Bash(<allowed prefix>:*),…"
+  --disallowedTools "WebFetch,WebSearch,Task,PowerShell,Bash(git commit:*),Bash(git push:*),…"
+  --setting-sources "" --strict-mcp-config
+  --settings <generated settings.json: PreToolUse hook → `aco hook pre-tool-use --run <id> --policy <file>`>
+  --include-hook-events --permission-prompts none [--max-budget-usd <remaining>  (api mode)]
   --append-system-prompt <implementer rules>
-  --settings <generated settings.json: PreToolUse hook → `aco hook pre-tool-use --run <id>`>
 cwd = worktree; prompt on stdin; env = allowlist + credentials for the resolved auth mode only (§16.5)
 ```
 
+As built in Phase 5 (details in `docs/claude-adapter.md`): `--setting-sources ""` and `--strict-mcp-config` keep a
+repository's `.claude/settings.json` and MCP servers out; schemas are passed without their root `$schema` (the CLI's
+validator rejects the draft 2020-12 URI); the adapter stops an invocation when a tool ran without a `PreToolUse`
+hook response or the hook exited with neither allow (0) nor block (2), since Claude Code silently ignores invalid
+settings in `-p` mode and treats a failing hook as non-blocking.
+
 - The guard hook blocks: paths outside the worktree; protected paths; paths outside `scope.paths` (configurable: block or flag); forbidden Git commands; `sudo`; download-and-execute pipes; network tools when `network: deny`.
-- `--effort`, `--json-schema`, `--session-id`, `--resume`, `--output-format stream-json`, and `--permission-mode` are present in Claude Code 2.1.311; `aco doctor` re-verifies them against the installed version, so incompatibilities fail preflight, not mid-run.
+- `--effort`, `--json-schema`, `--session-id`, `--resume`, `--output-format stream-json`, and `--permission-mode` are present in Claude Code 2.1.311; `aco doctor` re-verifies them against the installed version, so incompatibilities fail preflight, not mid-run. (`--max-turns` works but is not listed by 2.1.311's `--help`; it is assumed from 2.x.)
 - Container mode (`sandbox.mode: docker`): Claude and gates run in a container with only the worktree mounted; `bypassPermissions` may be used inside because the container is the boundary; the guard still runs.
 
 Codex reviewer profile (Stage 2 plan review, Stage 3 code review, Stage 4 final review):
@@ -893,7 +908,7 @@ version: 1
 planner:
   kind: claude-code
   model: claude-opus-5-5
-  effort: high
+  effort: high                     # low | medium | high | xhigh | max
 implementer:
   kind: claude-code
   model: claude-opus-5-5
@@ -933,6 +948,8 @@ policy:
   anti_gaming: fail
   allow_unverifiable_ac: false
   network: allowlist
+  max_file_bytes: 5242880          # added in Phase 4: larger files in a phase diff are rejected
+  binary_files: warn               # added in Phase 4: warn | fail
 git:
   tag: true
   notes: true

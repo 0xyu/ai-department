@@ -54,11 +54,11 @@ version: 1                          # must be 1 if present
 planner:                            # Stage 1 (Claude Code)
   kind: claude-code                 # claude-code | fake
   model: claude-opus-5-5
-  effort: high                      # low | medium | high | max
+  effort: high                      # low | medium | high | xhigh | max
 implementer:                        # Stages 3–4 (Claude Code)
   kind: claude-code                 # claude-code | fake
   model: claude-opus-5-5
-  effort: medium                    # low | medium | high | max
+  effort: medium                    # low | medium | high | xhigh | max
   strict_effort: true               # fail preflight if the CLI cannot set the effort
   extra_allowed_bash: []            # extra Bash command prefixes allowed to the implementer
 reviewer:                           # GPT Sol 6.1 via Codex CLI
@@ -82,8 +82,8 @@ language:
   operator: zh-CN                   # zh-CN | en — CLI output, doctor, error messages
   documents: en                     # en | zh-CN — plans, reports, prompts, commit messages
 
-gates:                              # exactly these six gate types (plus auto_detect)
-  typecheck:   {commands: [], timeout: 0s}
+gates:                              # exactly these six gate types (plus auto_detect); see quality-gates.md
+  typecheck:   {commands: [], timeout: 0s}   # timeout per command; 0s = 30m
   lint:        {commands: [], timeout: 0s}
   unit:        {commands: [], timeout: 0s}
   integration: {commands: [], timeout: 0s}
@@ -102,6 +102,8 @@ policy:
   anti_gaming: fail                 # warn | fail
   allow_unverifiable_ac: false
   network: allowlist                # deny | allowlist | allow
+  max_file_bytes: 5242880           # > 0; a phase diff that adds or changes a larger file is rejected
+  binary_files: warn                # warn | fail — binary files in a phase diff
 
 git:
   tag: true

@@ -66,7 +66,7 @@
       "if": {"properties": {"not_applicable": {"const": true}}, "required": ["not_applicable"]},
       "then": {
         "required": ["justification"],
-        "properties": {"justification": {"minLength": 1}, "commands": {"maxItems": 0}, "scanners": {"maxItems": 0}}
+        "properties": {"justification": {"type": "string", "minLength": 1}, "commands": {"type": "array", "maxItems": 0}, "scanners": {"type": "array", "maxItems": 0}}
       }
     },
     "phase": {

@@ -60,10 +60,10 @@ a reason.
 
 | Rule | Allowed in |
 |---|---|
-| `Secret.Reveal` | `internal/secure/` |
+| `Secret.Reveal` | `internal/secure/`, `internal/auth/childenv.go` (hands an API key to the matching agent CLI only) |
 | `slog.New`, the slog handlers, `slog.Default`/`SetDefault`, top-level `slog.Info` etc. | `internal/logging/` |
 | the stdlib `log` package | nowhere |
-| `os.Getenv`, `os.LookupEnv`, `os.Environ`, `os.ExpandEnv`, `syscall.Getenv` | `internal/cli/cli.go`, `internal/doctor/doctor.go` |
+| `os.Getenv`, `os.LookupEnv`, `os.Environ`, `os.ExpandEnv`, `syscall.Getenv` | `internal/cli/cli.go`, `internal/doctor/doctor.go`, `internal/gitops/exec.go` (builds the git child environment with secret variables removed), `internal/auth/childenv.go` (builds agent CLI environments from an allowlist) |
 | importing `securetest` | tests only |
 | dot imports (`import . "os"`) of `os`, `syscall`, `log`, `log/slog` | nowhere (they would hide calls from these checks) |
 
@@ -94,3 +94,48 @@ Phase 3 outputs follow the same rules (`docs/lifecycle.md`):
   whole on `Commit`, so a secret split across writes is still caught. `TestArtifactsNeverStoreSecrets` covers the
   encodings the redactor handles; hex, decimal, and Base64 forms are not masked in free text, so producers must not
   write encoded secrets in the first place.
+
+Phase 4 outputs (`docs/git.md`):
+
+- **Git** (`internal/gitops`): secret variables are removed from the environment of every git call (GitHub tokens are
+  kept only for push and PR); commit messages, tag messages, and notes are masked before Git sees them; the branch
+  reflog gets a fixed message, never the commit subject; error messages name the git subcommand only and carry
+  masked stderr. No repository-selected program runs: hooks, fsmonitor, and every configured clean/smudge/process
+  filter are disabled on every call. `TestCommitMessagesAreMasked` (commit message and reflog),
+  `TestTimeoutAndErrorsAreMasked`, `TestGitEnvScrubsSecrets`, `TestHooksDoNotRun`, and
+  `TestExternalFiltersNeverRun` cover this.
+- **Diff policy** (`internal/policy`): a finding records the path, line, and rule of a detected secret, never the
+  text. `TestSecretFindingsNeverContainTheSecret` checks findings as JSON and text.
+
+## Agent processes (Phase 5)
+
+- **Environment.** Agent CLIs get an allowlist of the parent's variables (`auth.ChildEnv`), never a secret or `ACO_*`
+  variable and never the §16.5 removal list (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`,
+  `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, `OPENAI_API_KEY`, `CODEX_API_KEY`).
+  Only api mode adds `ANTHROPIC_API_KEY`, from the resolved key. Tests dump the child environment of a fake CLI.
+- **Auth source.** Every Claude invocation checks `apiKeySource` in the init message against the resolved mode and
+  stops the process tree on a mismatch (class `auth`).
+- **Prompts and transcripts.** Prompts go to the CLI on stdin after masking; prompts, transcripts, stderr, settings,
+  and guard files are written through the artifact store, which masks them again.
+- **Guard hook.** `aco hook pre-tool-use` decides every tool call from a policy file the orchestrator wrote outside the
+  worktree; anything it cannot decide is blocked. Its deny log records tool, rule, and path, never command text. The
+  adapter verifies from the stream that the hook ran (see docs/claude-adapter.md).
+- **Settings isolation.** `--setting-sources ""` and `--strict-mcp-config`: user, project, and local Claude settings
+  and MCP servers do not apply to ACO's invocations.
+
+### Reviewed gosec findings (Phase 5)
+
+`gosec` on the Phase 5 packages reports only these, all accepted as designed: G204 (the `claude` binary is started
+with ACO-built arguments and no shell), G304 (reading the ACO-written guard policy and the operator's env file),
+G101 (environment variable *names* such as `ANTHROPIC_API_KEY`, not values), G103 (the `unsafe.Pointer` the Win32
+job-object API requires).
+
+### Quality gates (Phase 6)
+
+- Gate commands run with `auth.GateEnv`: the agent allowlist without any credential, secret-looking variable, or
+  `ACO_*` variable (tested by dumping a gate command's environment).
+- Gate logs, parsed messages, and command lines in results are masked by the run's Redactor before they are stored
+  or trimmed; the secret scanner reports rule, path, and line, never the value.
+- Reviewed gosec items in `internal/gates`: G204 (gate commands come from the frozen plan, the config, or
+  auto-detection and run through `sh -c` by design) and G304 (manifests in the worktree and files in ACO's private
+  temporary directories).

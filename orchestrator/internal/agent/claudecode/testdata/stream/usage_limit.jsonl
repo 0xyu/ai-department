@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"{{SESSION}}","apiKeySource":"{{SOURCE}}","model":"claude-opus-5-5","tools":["Read","Edit","Write","Glob","Grep","Bash","StructuredOutput"],"claude_code_version":"2.1.311","permissionMode":"acceptEdits","cwd":"/w","future_field":{"x":1}}
+{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1794197400,"rateLimitType":"five_hour"},"session_id":"{{SESSION}}"}
+{"type":"assistant","message":{"id":"msg_l","content":[{"type":"text","text":"You've hit your limit · resets 3pm (Europe/Berlin)"}]},"error":"rate_limit","session_id":"{{SESSION}}"}
+{"type":"result","subtype":"success","is_error":true,"num_turns":1,"result":"You've hit your limit · resets 3pm (Europe/Berlin)","session_id":"{{SESSION}}","total_cost_usd":0}

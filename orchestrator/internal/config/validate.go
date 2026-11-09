@@ -9,7 +9,7 @@ import (
 
 // Allowed value sets.
 var (
-	Efforts            = []string{"low", "medium", "high", "max"}
+	Efforts            = []string{"low", "medium", "high", "xhigh", "max"}
 	ReasoningEfforts   = []string{"minimal", "low", "medium", "high", "xhigh"}
 	AuthModes          = []string{"subscription", "api"}
 	AuthFallbacks      = []string{"none", "api"}
@@ -90,6 +90,8 @@ func Validate(c *Config) Errors {
 	v.oneOf("policy.anti_gaming", c.Policy.AntiGaming, WarnFail)
 	v.oneOf("policy.network", c.Policy.Network, NetworkModes)
 	v.nonEmptyItems("policy.protected_paths", c.Policy.ProtectedPaths)
+	v.positive("policy.max_file_bytes", c.Policy.MaxFileBytes)
+	v.oneOf("policy.binary_files", c.Policy.BinaryFiles, WarnFail)
 
 	v.oneOf("git.merge_to_base", c.Git.MergeToBase, MergeModes)
 	v.oneOf("sandbox.mode", c.Sandbox.Mode, SandboxModes)

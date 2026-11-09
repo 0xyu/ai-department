@@ -1,0 +1,12 @@
+{{define "gate_fix.tmpl"}}
+# Task: fix failing quality gates (phase {{.Phase}})
+
+The orchestrator ran the quality gates on your changes and these failed. Fix the causes in the code or tests. Do not skip, delete, or weaken tests or checks, and do not change gate configuration.
+
+{{range .GateFailures}}## {{.ID}}: {{.Gate}}
+Command: {{.Command}}
+{{data (printf "gate log %s" .ID) .Log}}
+
+{{end}}
+Answer every gate failure ID in finding_responses ("fixed" with what you changed, or "cannot_fix_within_spec" / "cannot_fix_safely" with the reason), reassess every acceptance criterion ({{join .ACIDs ", "}}), and return the implementation report as the structured output.
+{{end}}

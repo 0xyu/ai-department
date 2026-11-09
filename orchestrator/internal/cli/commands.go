@@ -47,6 +47,8 @@ var flagDefs = map[string]flagDef{
 	"addr":             {kind: kindString, usage: i18n.FlagAddr, placeholder: i18n.PhAddr, def: "127.0.0.1:7420"},
 	"transport":        {kind: kindString, usage: i18n.FlagTransport, placeholder: i18n.PhTransport, def: "stdio"},
 	"run":              {kind: kindString, usage: i18n.FlagRunID, placeholder: i18n.PhRunID},
+	"policy":           {kind: kindString, usage: i18n.FlagPolicy, placeholder: i18n.PhFile},
+	"probe":            {kind: kindBool, usage: i18n.FlagProbe},
 }
 
 var (
@@ -90,13 +92,13 @@ func commands() []*command {
 		{name: "validate-plan", summary: i18n.CmdValidatePlanSummary, args: i18n.CmdArgsPlanPath,
 			flags: []string{"strict", "json", "repo"}, run: runValidatePlan},
 		{name: "doctor", summary: i18n.CmdDoctorSummary,
-			flags: flagsOf(configFlags, authFlags, []string{"security"}), run: runDoctor},
+			flags: flagsOf(configFlags, authFlags, []string{"security", "probe"}), run: runDoctor},
 		{name: "serve", summary: i18n.CmdServeSummary,
 			flags: flagsOf([]string{"addr"}, configFlags)},
 		{name: "mcp", summary: i18n.CmdMCPSummary,
 			flags: []string{"transport"}},
 		{name: "hook", summary: i18n.CmdHookSummary, args: i18n.CmdArgsHookEvent,
-			flags: []string{"run"}, internal: true},
+			flags: []string{"run", "policy"}, internal: true, run: runHook},
 		{name: "version", summary: i18n.CmdVersionSummary, run: runVersion},
 	}
 }

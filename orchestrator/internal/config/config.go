@@ -32,7 +32,7 @@ type Config struct {
 type AgentConfig struct {
 	Kind   string `yaml:"kind"`   // claude-code | fake
 	Model  string `yaml:"model"`  // e.g. claude-opus-5-5
-	Effort string `yaml:"effort"` // low | medium | high | max
+	Effort string `yaml:"effort"` // low | medium | high | xhigh | max
 }
 
 // ImplementerConfig configures the Stage 3/4 implementer.
@@ -115,7 +115,9 @@ type PolicyConfig struct {
 	TestsMissing        string   `yaml:"tests_missing"`     // warn | fail
 	AntiGaming          string   `yaml:"anti_gaming"`       // warn | fail
 	AllowUnverifiableAC bool     `yaml:"allow_unverifiable_ac"`
-	Network             string   `yaml:"network"` // deny | allowlist | allow
+	Network             string   `yaml:"network"`        // deny | allowlist | allow
+	MaxFileBytes        int      `yaml:"max_file_bytes"` // largest file a phase diff may add or change
+	BinaryFiles         string   `yaml:"binary_files"`   // warn | fail: binary files in a phase diff
 }
 
 // GitConfig configures Git behaviour.

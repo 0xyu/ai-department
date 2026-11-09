@@ -1,0 +1,33 @@
+{
+  "config": {
+    "protocol_version": "v1.0.0",
+    "scanner_name": "govulncheck",
+    "scan_level": "symbol"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2023-1571",
+    "summary": "Denial of service via crafted HTTP/2 stream in net/http and golang.org/x/net",
+    "affected": [{"package": {"name": "golang.org/x/net", "ecosystem": "Go"}}]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-9999",
+    "summary": "Imported but not called"
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2023-1571",
+    "fixed_version": "v0.7.0",
+    "trace": [{"module": "golang.org/x/net", "version": "v0.6.0", "package": "golang.org/x/net/http2", "function": "ServerConn.ReadFrame"}, {"module": "example.com/app", "package": "example.com/app", "function": "main"}]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-9999",
+    "trace": [{"module": "example.com/dep", "version": "v1.0.0", "package": "example.com/dep"}]
+  }
+}

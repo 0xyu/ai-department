@@ -6,6 +6,8 @@ package doctor
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0xyu/aco/internal/agent"
+	"github.com/0xyu/aco/internal/agent/claudecode"
 	"github.com/0xyu/aco/internal/auth"
 	"github.com/0xyu/aco/internal/config"
 	"github.com/0xyu/aco/internal/i18n"
@@ -57,6 +61,16 @@ type Input struct {
 	ACOHome    string // ~/.aco
 	Repo       string // only set when --repo was given
 	Security   bool   // --security
+	// Claude enables the Claude Code checks (flags, effort, login, probe).
+	Claude *ClaudeInput
+}
+
+// ClaudeInput configures the Claude Code checks (§13 preflight).
+type ClaudeInput struct {
+	Mode         auth.Mode
+	StrictEffort bool
+	// Probe makes one real call (aco doctor --probe); nil skips it.
+	Probe func(ctx context.Context) (*claudecode.ProbeResult, error)
 }
 
 // Failed reports whether any check failed.
@@ -128,7 +142,11 @@ func Run(ctx context.Context, in Input) []Check {
 
 	// Tools.
 	out = append(out, toolCheck(ctx, in.Exec, "git", []string{"--version"}, &MinGitVersion))
-	out = append(out, toolCheck(ctx, in.Exec, "claude", []string{"--version"}, nil))
+	claudeTool := toolCheck(ctx, in.Exec, "claude", []string{"--version"}, nil)
+	out = append(out, claudeTool)
+	if in.Claude != nil && claudeTool.Status != Fail {
+		out = append(out, claudeChecks(ctx, in.Exec, *in.Claude)...)
+	}
 	out = append(out, toolCheck(ctx, in.Exec, "codex", []string{"--version"}, nil))
 
 	// ~/.aco writable.
@@ -296,3 +314,91 @@ func scrubbedEnv() []string {
 
 // DefaultACOHome returns ~/.aco.
 func DefaultACOHome(home string) string { return filepath.Join(home, ".aco") }
+
+// claudeChecks verifies the installed Claude Code: required flags, how
+// effort is set, the login of the resolved mode, and optionally a probe call.
+func claudeChecks(ctx context.Context, ex Exec, ci ClaudeInput) []Check {
+	var out []Check
+	add := func(id string, st Status, key i18n.Key, args ...any) {
+		out = append(out, Check{ID: id, Status: st, Msg: i18n.M(key, args...)})
+	}
+	red := secure.NewRedactor()
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	v, _ := ex.Output(cctx, "", "claude", "--version")
+	h, err := ex.Output(cctx, "", "claude", "--help")
+	if err != nil {
+		add("claude.flags", Fail, i18n.DoctorClaudeHelpError, firstLine(red.String(err.Error())))
+		return out
+	}
+	caps := claudecode.ParseCapabilities(v, h)
+	if m := caps.Missing(); len(m) > 0 {
+		add("claude.flags", Fail, i18n.DoctorClaudeFlagsMissing, caps.Version, "--"+strings.Join(m, ", --"))
+	} else {
+		add("claude.flags", OK, i18n.DoctorClaudeFlagsOK, caps.Version)
+	}
+	switch {
+	case caps.EffortVia() == claudecode.EffortFlag:
+		add("claude.effort", OK, i18n.DoctorClaudeEffortFlag)
+	case ci.StrictEffort:
+		add("claude.effort", Fail, i18n.DoctorClaudeEffortStrict)
+	default:
+		add("claude.effort", Warn, i18n.DoctorClaudeEffortWarn)
+	}
+
+	if ci.Mode == auth.API {
+		add("claude.auth", Info, i18n.DoctorClaudeAuthAPI)
+	} else {
+		st, err := ex.Output(cctx, "", "claude", "auth", "status", "--json")
+		var s struct {
+			LoggedIn         bool   `json:"loggedIn"`
+			AuthMethod       string `json:"authMethod"`
+			SubscriptionType string `json:"subscriptionType"`
+		}
+		switch {
+		case err != nil:
+			add("claude.auth", Warn, i18n.DoctorClaudeAuthUnknown, firstLine(red.String(err.Error())))
+		case json.Unmarshal([]byte(st), &s) != nil:
+			add("claude.auth", Warn, i18n.DoctorClaudeAuthUnknown, "claude auth status --json")
+		case !s.LoggedIn:
+			add("claude.auth", Fail, i18n.DoctorClaudeNotLoggedIn)
+		case subscriptionMethod(s.AuthMethod):
+			plan := s.SubscriptionType
+			if plan == "" {
+				plan = "-"
+			}
+			add("claude.auth", OK, i18n.DoctorClaudeAuthSub, s.AuthMethod, plan)
+		case strings.Contains(strings.ToLower(s.AuthMethod), "api") || strings.EqualFold(s.AuthMethod, "console"):
+			add("claude.auth", Fail, i18n.DoctorClaudeAuthWrong, s.AuthMethod)
+		default:
+			add("claude.auth", Warn, i18n.DoctorClaudeAuthUnknown, s.AuthMethod)
+		}
+	}
+
+	if ci.Probe == nil {
+		add("claude.probe", Info, i18n.DoctorClaudeProbeSkipped)
+		return out
+	}
+	res, err := ci.Probe(ctx)
+	if err != nil {
+		class := "error"
+		var ae *agent.Error
+		if errors.As(err, &ae) {
+			class = string(ae.Class)
+		}
+		add("claude.probe", Fail, i18n.DoctorClaudeProbeFail, class, firstLine(red.String(err.Error())))
+		return out
+	}
+	add("claude.probe", OK, i18n.DoctorClaudeProbeOK, res.Model, res.AuthSource)
+	return out
+}
+
+// subscriptionMethod reports whether `claude auth status` names a
+// subscription (OAuth) login.
+func subscriptionMethod(m string) bool {
+	switch strings.ToLower(m) {
+	case "claude.ai", "oauth", "oauth_token", "subscription", "claude_ai":
+		return true
+	}
+	return false
+}

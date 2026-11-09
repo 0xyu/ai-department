@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0xyu/aco/schemas/impl-report.schema.json",
+  "title": "ACO implementation report (v1)",
+  "description": "What the implementer returns at the end of every Stage 3/4 invocation (§11.4). Claims here are recorded but never trusted: the orchestrator runs the quality gates and the reviewer checks the diff.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "summary", "files_changed", "design_decisions", "tests", "acceptance_criteria", "finding_responses", "known_gaps"],
+  "properties": {
+    "version": {"const": 1},
+    "summary": {"type": "string", "minLength": 1, "description": "What was done in this invocation, in a few sentences."},
+    "files_changed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "change", "reason"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "description": "Worktree-relative, slash-separated."},
+          "change": {"enum": ["added", "modified", "deleted", "renamed"]},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "design_decisions": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "change", "covers"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "change": {"enum": ["added", "modified"]},
+          "covers": {"type": "array", "items": {"$ref": "#/$defs/acId"}}
+        }
+      }
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "description": "Self-assessment of every acceptance criterion of the phase.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": {"$ref": "#/$defs/acId"},
+          "status": {"enum": ["met", "partial", "not_met", "not_verifiable"]},
+          "evidence": {"type": "string", "description": "Tests, files, or commands that show the status."}
+        }
+      }
+    },
+    "finding_responses": {
+      "type": "array",
+      "description": "One answer per finding or gate failure the orchestrator sent in this invocation (empty for the first implementation).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "response", "detail"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "response": {"enum": ["fixed", "disputed", "cannot_fix_within_spec", "cannot_fix_safely"]},
+          "detail": {"type": "string", "minLength": 1, "description": "What changed (fixed), or the reasoning and evidence (other answers)."}
+        }
+      }
+    },
+    "known_gaps": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  },
+  "$defs": {
+    "acId": {"type": "string", "pattern": "^AC-[0-9]{2,4}\\.[1-9][0-9]*$"}
+  }
+}

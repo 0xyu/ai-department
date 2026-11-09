@@ -14,3 +14,9 @@ var Plan []byte
 //
 //go:embed event.schema.json
 var Event []byte
+
+// ImplReport is impl-report.schema.json: the implementer's structured
+// report at the end of every Stage 3/4 invocation.
+//
+//go:embed impl-report.schema.json
+var ImplReport []byte

@@ -1,0 +1,21 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "minimist": {
+      "name": "minimist", "severity": "critical", "isDirect": false,
+      "via": [{"source": 1096390, "name": "minimist", "dependency": "minimist", "title": "Prototype Pollution in minimist", "url": "https://github.com/advisories/GHSA-xvch-5gv4-984h", "severity": "critical", "range": "<0.2.4"}],
+      "effects": ["mkdirp"], "range": "<=0.2.3", "fixAvailable": true
+    },
+    "lodash": {
+      "name": "lodash", "severity": "high", "isDirect": true,
+      "via": [{"source": 1094499, "name": "lodash", "dependency": "lodash", "title": "Command Injection in lodash", "url": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm", "severity": "high", "range": "<4.17.21"}],
+      "effects": [], "range": "<4.17.21", "fixAvailable": true
+    },
+    "debug": {
+      "name": "debug", "severity": "moderate", "isDirect": true,
+      "via": [{"source": 1094457, "name": "debug", "dependency": "debug", "title": "Regular Expression Denial of Service in debug", "url": "https://github.com/advisories/GHSA-gxpj-cx7g-858c", "severity": "moderate", "range": "<2.6.9"}],
+      "effects": [], "range": "<2.6.9", "fixAvailable": true
+    }
+  },
+  "metadata": {"vulnerabilities": {"info": 0, "low": 0, "moderate": 1, "high": 1, "critical": 1, "total": 3}}
+}

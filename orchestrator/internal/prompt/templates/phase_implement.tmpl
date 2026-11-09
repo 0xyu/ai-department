@@ -1,0 +1,34 @@
+{{define "phase_implement.tmpl"}}
+# Task: implement phase {{.Phase}} — {{.PhaseTitle}} (attempt {{.Attempt}})
+
+Implement this phase in the current worktree, following the frozen plan. This is a fresh session; nothing from earlier phases is carried over except what is in the repository and the digests below.
+
+## Plan overview (frozen)
+{{data "plan_overview" .PlanOverview}}
+
+## Phase Specification (frozen, verbatim)
+{{data "phase_spec" .PhaseSpec}}
+
+## AGENTS.md
+{{data "agents_md" .AgentsMD}}
+
+## Completed phases
+{{range .Digests}}{{data (printf "digest %s %s" (phase .Phase) .Title) .Digest}}
+{{else}}None: this is the first phase.
+{{end}}
+## Scope
+{{if .Workspace.ScopePaths}}Change only files matching: {{join .Workspace.ScopePaths ", "}} (and tests for them). Changes elsewhere are flagged or blocked.{{else}}No scope.paths are declared; stay within the phase scope described above.{{end}}
+Protected (read-only): {{join .Workspace.ProtectedPaths ", "}}
+
+## Quality gates you will be judged by (run by the orchestrator)
+{{range .Gates}}- {{.Type}}: {{if .NotApplicable}}not applicable{{else if .Commands}}{{join .Commands "; "}}{{else}}auto-detected{{end}}
+{{end}}
+You may run these commands yourself while working.
+{{if .Lessons}}
+## Lessons from the previous attempt
+The previous attempt of this phase was discarded and the worktree was reset to the phase base.
+{{data "lessons" .Lessons}}
+{{end}}
+## Report
+End with the implementation report as the structured output. Assess every acceptance criterion: {{join .ACIDs ", "}}. finding_responses is empty for this first implementation.
+{{end}}

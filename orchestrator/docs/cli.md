@@ -27,10 +27,10 @@ A bad value for an integer or boolean flag is reported by flag name and expected
 | `cancel <run-id>` | stub | |
 | `report <run-id>` | stub | `--phase N --final --format md\|json` |
 | `validate-plan <file\|dir>` | **implemented** (Phase 2) | `--strict --json --repo` |
-| `doctor` | **implemented (v1)** | `--repo --config --set --env-file --auth-mode --claude-auth-mode --codex-auth-mode --security` |
+| `doctor` | **implemented** (Claude checks in Phase 5) | `--repo --config --set --env-file --auth-mode --claude-auth-mode --codex-auth-mode --security --probe` |
 | `serve` | stub | `--addr` (default `127.0.0.1:7420`) + config flags |
 | `mcp` | stub | `--transport stdio\|http` |
-| `hook <event>` | stub (internal) | `--run <run-id>` |
+| `hook pre-tool-use` | **implemented** (Phase 5, internal) | `--run <run-id> --policy <file>` |
 | `version` | **implemented** | |
 
 Stubs print "not implemented" (in the operator language) and exit with code 2.
@@ -60,14 +60,24 @@ Loads config, the env file, and resolves auth, then checks in this order:
 | `auth.key.claude`, `auth.key.codex` | only for agents that need a key (API mode, or fallback `api`): OK with source, or FAIL naming the missing variable |
 | `tool.git` | FAIL if missing or older than 2.30 |
 | `tool.claude`, `tool.codex` | FAIL if missing or `--version` fails; version shown |
+| `claude.flags`, `claude.effort`, `claude.auth`, `claude.probe` | Claude Code capability, effort, login, and (with `--probe`) a real call; see docs/claude-adapter.md |
 | `aco_home` | FAIL if `~/.aco` is not writable |
 | `repo` | only with `--repo`: FAIL if not a Git repository |
 | `security` | only with `--security`: placeholder until the security phase |
 
 Exit code: 0 when nothing failed (warnings allowed), 3 when any check failed, 2 on config/env/auth errors.
 
-Version probes run with secret environment variables removed and `GIT_TERMINAL_PROMPT=0`. Later phases extend
-`doctor` with CLI capability checks (flags, effort, model availability, auth-source verification).
+Version probes run with secret environment variables removed and `GIT_TERMINAL_PROMPT=0`. `--probe` makes one small
+real Claude call (it uses a little subscription quota or API budget); without it model availability is not checked.
+Codex checks follow in Phase 7.
+
+## `aco hook pre-tool-use` (internal)
+
+Claude Code's PreToolUse hook for every ACO invocation; the adapter writes the command into its generated settings.
+It reads one tool call as JSON on stdin and the guard policy from `--policy`. Exit 0 with no output: no objection.
+Exit 2 with an `ACO guard: …` reason on stderr: blocked (Claude Code shows the reason to the model). Every error —
+unreadable policy, a policy of another `--run`, malformed input, unexpected event — blocks. Denials are appended to the
+policy's deny log. The output is protocol text for the model, in English.
 
 ## `aco validate-plan`
 

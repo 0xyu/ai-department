@@ -1,0 +1,18 @@
+{"Time":"2026-11-09T10:00:00Z","Action":"start","Package":"example.com/goproj"}
+{"Time":"2026-11-09T10:00:00Z","Action":"run","Package":"example.com/goproj","Test":"TestAdd"}
+{"Time":"2026-11-09T10:00:00Z","Action":"output","Package":"example.com/goproj","Test":"TestAdd","Output":"=== RUN   TestAdd\n"}
+{"Time":"2026-11-09T10:00:00Z","Action":"pass","Package":"example.com/goproj","Test":"TestAdd","Elapsed":0}
+{"Time":"2026-11-09T10:00:00Z","Action":"run","Package":"example.com/goproj","Test":"TestKnownBroken"}
+{"Time":"2026-11-09T10:00:00Z","Action":"output","Package":"example.com/goproj","Test":"TestKnownBroken","Output":"    calc_test.go:14: pre-existing failure: Sub(5, 3) != 3\n"}
+{"Time":"2026-11-09T10:00:00Z","Action":"output","Package":"example.com/goproj","Test":"TestKnownBroken","Output":"--- FAIL: TestKnownBroken (0.00s)\n"}
+{"Time":"2026-11-09T10:00:00Z","Action":"fail","Package":"example.com/goproj","Test":"TestKnownBroken","Elapsed":0}
+{"Time":"2026-11-09T10:00:00Z","Action":"run","Package":"example.com/goproj","Test":"TestSkipped"}
+{"Time":"2026-11-09T10:00:00Z","Action":"skip","Package":"example.com/goproj","Test":"TestSkipped","Elapsed":0}
+{"Time":"2026-11-09T10:00:00Z","Action":"output","Package":"example.com/goproj","Output":"FAIL\n"}
+{"Time":"2026-11-09T10:00:00Z","Action":"fail","Package":"example.com/goproj","Elapsed":0.01}
+{"ImportPath":"example.com/goproj/broken [example.com/goproj/broken.test]","Action":"build-output","Output":"broken/x.go:3:1: syntax error: non-declaration statement outside function body\n"}
+{"ImportPath":"example.com/goproj/broken [example.com/goproj/broken.test]","Action":"build-fail"}
+{"Time":"2026-11-09T10:00:00Z","Action":"start","Package":"example.com/goproj/broken"}
+{"Time":"2026-11-09T10:00:00Z","Action":"output","Package":"example.com/goproj/broken","Output":"FAIL\texample.com/goproj/broken [build failed]\n"}
+{"Time":"2026-11-09T10:00:00Z","Action":"fail","Package":"example.com/goproj/broken","Elapsed":0,"FailedBuild":"example.com/goproj/broken [example.com/goproj/broken.test]"}
+{"Time":"2026-11-09T10:00:00Z","Action":"future-action","Package":"example.com/goproj","NewField":1}

@@ -21,12 +21,22 @@ func base64URL(s string) string { return base64.URLEncoding.EncodeToString([]byt
 var (
 	// Packages that may call Secret.Reveal (later: the agent adapters that
 	// pass API keys to the child process environment).
-	revealAllowed = []string{"internal/secure/"}
+	revealAllowed = []string{
+		"internal/secure/",
+		// Hands an API key to the matching agent CLI's environment (§16.5).
+		"internal/auth/childenv.go",
+	}
 	// Only the logging package builds slog loggers and handlers; everything
 	// else receives a *slog.Logger that already masks.
 	slogAllowed = []string{"internal/logging/"}
 	// Files that may read the process environment directly.
-	envAllowed = []string{"internal/cli/cli.go", "internal/doctor/doctor.go"}
+	envAllowed = []string{
+		"internal/cli/cli.go", "internal/doctor/doctor.go",
+		// Builds the git child environment with secret variables removed.
+		"internal/gitops/exec.go",
+		// Builds agent CLI child environments from an allowlist (§16.5).
+		"internal/auth/childenv.go",
+	}
 )
 
 var slogForbidden = map[string]bool{

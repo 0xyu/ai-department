@@ -1,0 +1,27 @@
+{{define "plan_create.tmpl"}}
+# Task: create the implementation plan package
+
+Create the plan package for the requirement below. The repository you may inspect (read-only) is your working directory.
+{{if .SuppliedPlan}}
+The user supplied an existing plan. Convert it into the plan package format, keep its intent and phase structure where they are sound, and fix what the rules require (numbered requirements, testable acceptance criteria, six gates per phase, traceability).
+{{end}}
+## Requirement document
+{{data "requirements" .Requirements}}
+{{if .SuppliedPlan}}
+## Supplied plan
+{{data "supplied_plan" .SuppliedPlan}}
+{{end}}
+## Repository overview
+{{data "repository_overview" .RepoOverview}}
+
+## AGENTS.md
+{{if .AgentsMD}}{{data "agents_md" .AgentsMD}}{{else}}The repository has no AGENTS.md. Propose one in agents_md.{{end}}
+
+## Plan format
+{{data "plan_format" .PlanFormatGuide}}
+
+## Quality gates ACO can run for this repository
+{{data "gate_catalogue" .GateCatalogue}}
+
+Return the complete plan package as the structured output.
+{{end}}

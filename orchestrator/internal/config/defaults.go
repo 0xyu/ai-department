@@ -59,6 +59,8 @@ func Default() *Config {
 			AntiGaming:          "fail",
 			AllowUnverifiableAC: false,
 			Network:             "allowlist",
+			MaxFileBytes:        5 << 20,
+			BinaryFiles:         "warn",
 		},
 		Git: GitConfig{
 			Tag:         true,

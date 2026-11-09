@@ -1,0 +1,14 @@
+[project]
+name = "pyproj"
+version = "0.1.0"
+
+[tool.mypy]
+strict = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: needs external services",
+]

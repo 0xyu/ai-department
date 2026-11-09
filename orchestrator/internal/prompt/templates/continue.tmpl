@@ -1,0 +1,8 @@
+{{define "continue.tmpl"}}
+# Task: finish the current work
+
+Your previous turn ended before the task was complete.
+{{data "reason" .Reason}}
+
+Continue where you stopped. When the task is done, return the implementation report as the structured output, matching the schema exactly, with an assessment of every acceptance criterion ({{join .ACIDs ", "}}).
+{{end}}

@@ -1,0 +1,16 @@
+{{define "review_fix.tmpl"}}
+# Task: address review findings (phase {{.Phase}})
+
+An independent reviewer read your complete diff. Address these findings, most severe first.
+
+{{range .Findings}}{{data (printf "finding %s" .ID) (printf "id: %s\nseverity: %s\ncategory: %s\nlocation: %s\ntitle: %s\ndescription: %s\nrequired_change: %s" .ID .Severity .Category .Location .Title .Description .RequiredChange)}}
+
+{{end}}
+Answer every finding ID in finding_responses:
+- "fixed": what you changed;
+- "disputed": your reasoning and evidence (a test, a spec line) — only if the finding is wrong;
+- "cannot_fix_within_spec": the frozen plan makes it impossible (name the conflicting text);
+- "cannot_fix_safely": the fix would need protected paths, secrets, destructive operations, or disabled checks.
+
+Reassess every acceptance criterion ({{join .ACIDs ", "}}) and return the implementation report as the structured output.
+{{end}}

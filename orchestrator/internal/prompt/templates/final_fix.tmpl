@@ -1,0 +1,24 @@
+{{define "final_fix.tmpl"}}
+# Task: fix final verification failures (attempt {{.Attempt}})
+
+All phases of the plan are committed, but final verification of the whole project failed. Fix the causes. Cross-phase problems (inconsistent interfaces, integration gaps, leftover TODOs) are in scope; new features are not. This is a fresh session.
+
+## Plan overview (frozen)
+{{data "plan_overview" .PlanOverview}}
+
+## AGENTS.md
+{{data "agents_md" .AgentsMD}}
+
+## Completed phases
+{{range .Digests}}{{data (printf "digest %s %s" (phase .Phase) .Title) .Digest}}
+{{end}}
+## Final verification failures
+{{data "final_failures" .Failures}}
+
+## Quality gates (run by the orchestrator on the whole project)
+{{range .Gates}}- {{.Type}}: {{if .NotApplicable}}not applicable{{else if .Commands}}{{join .Commands "; "}}{{else}}auto-detected{{end}}
+{{end}}
+Protected (read-only): {{join .Workspace.ProtectedPaths ", "}}
+
+End with the implementation report as the structured output; answer each failure you addressed in finding_responses (use IDs from the failure list where given) and list remaining problems in known_gaps.
+{{end}}

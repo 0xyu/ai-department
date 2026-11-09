@@ -1,0 +1,16 @@
+{{define "plan_revise.tmpl"}}
+# Task: revise the plan package (review round {{.Round}})
+
+The independent review and the deterministic checks did not approve your plan package. Revise it.
+
+- Address every finding. Answer each one in finding_responses with its ID and either "fixed" (what you changed) or "disputed" (your reasoning and evidence). A dispute is accepted only if the reviewer agrees, so dispute only what is wrong.
+- Fix every error in the deterministic check results; they are computed by code and are not negotiable.
+- Return the complete revised package, not a diff, plus finding_responses, as the structured output.
+
+## Review findings
+{{range .Findings}}{{data (printf "finding %s" .ID) (printf "id: %s\nseverity: %s\ndimension: %s\nlocation: %s\ntitle: %s\ndescription: %s\nrequired_change: %s" .ID .Severity .Dimension .Location .Title .Description .RequiredChange)}}
+{{else}}(no reviewer findings)
+{{end}}
+## Deterministic plan checks
+{{data "plan_checks" .CheckResults}}
+{{end}}

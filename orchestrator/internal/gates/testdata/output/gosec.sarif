@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "gosec", "rules": [
+      {"id": "G101", "defaultConfiguration": {"level": "error"}, "properties": {"tags": ["security", "HIGH"]}},
+      {"id": "G104", "defaultConfiguration": {"level": "warning"}},
+      {"id": "G402", "properties": {"security-severity": "9.1"}}
+    ]}},
+    "results": [
+      {"ruleId": "G101", "level": "error", "message": {"text": "Potential hardcoded credentials"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "cmd/main.go"}, "region": {"startLine": 10}}}]},
+      {"ruleId": "G104", "level": "warning", "message": {"text": "Errors unhandled"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "internal/x/x.go"}, "region": {"startLine": 5}}}]},
+      {"ruleId": "G402", "ruleIndex": 2, "message": {"text": "TLS InsecureSkipVerify set true"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "net/tls.go"}, "region": {"startLine": 7}}}]}
+    ]
+  }]
+}

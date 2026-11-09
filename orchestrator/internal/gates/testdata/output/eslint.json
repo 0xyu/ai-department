@@ -1,0 +1,1 @@
+[{"filePath":"/repo/src/a.js","messages":[{"ruleId":"no-unused-vars","severity":2,"message":"'x' is assigned a value but never used.","line":3,"column":7},{"ruleId":"semi","severity":1,"message":"Missing semicolon.","line":4,"column":10}],"errorCount":1,"warningCount":1},{"filePath":"/repo/src/b.js","messages":[],"errorCount":0}]

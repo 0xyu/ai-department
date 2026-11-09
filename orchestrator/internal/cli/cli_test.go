@@ -25,6 +25,15 @@ func (f fakeExec) Output(_ context.Context, _ string, name string, args ...strin
 	if len(args) > 0 && args[0] == "-C" {
 		return args[1], nil
 	}
+	if name == "claude" && len(args) > 0 {
+		switch args[0] {
+		case "--help":
+			b, err := os.ReadFile("../agent/claudecode/testdata/claude-help-2.1.311.txt")
+			return string(b), err
+		case "auth":
+			return `{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}`, nil
+		}
+	}
 	return f.tools[name], nil
 }
 
@@ -35,6 +44,7 @@ type harness struct {
 	env    map[string]string
 	stdout bytes.Buffer
 	stderr bytes.Buffer
+	stdin  string
 }
 
 func newHarness(t *testing.T) *harness {
@@ -62,6 +72,7 @@ func (h *harness) run(args ...string) int {
 	h.stdout.Reset()
 	h.stderr.Reset()
 	sys := System{
+		Stdin:     strings.NewReader(h.stdin),
 		Stdout:    &h.stdout,
 		Stderr:    &h.stderr,
 		LookupEnv: func(k string) (string, bool) { v, ok := h.env[k]; return v, ok },
@@ -132,7 +143,7 @@ func TestHelpInEnglishWithUserConfigAndSet(t *testing.T) {
 func TestStubsExitTwoNotImplemented(t *testing.T) {
 	stubs := map[string][]string{
 		"run": nil, "plan": nil, "resume": {"r1"}, "status": nil, "pause": {"r1"}, "cancel": {"r1"},
-		"report": {"r1"}, "serve": nil, "mcp": nil, "hook": {"pre-tool-use"},
+		"report": {"r1"}, "serve": nil, "mcp": nil,
 	}
 	for name, args := range stubs {
 		h := newHarness(t)
@@ -302,7 +313,7 @@ func TestConfigWithAPIKeyRejected(t *testing.T) {
 func TestConfigInvalidValueNamesField(t *testing.T) {
 	h := newHarness(t)
 	code := h.run("doctor", "--set", "implementer.effort=extreme")
-	if code != exitcode.Usage || !strings.Contains(h.stderr.String(), "implementer.effort") || !strings.Contains(h.stderr.String(), "low|medium|high|max") {
+	if code != exitcode.Usage || !strings.Contains(h.stderr.String(), "implementer.effort") || !strings.Contains(h.stderr.String(), "low|medium|high|xhigh|max") {
 		t.Errorf("exit %d stderr %q", code, h.stderr.String())
 	}
 }

@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","session_id":"{{SESSION}}","apiKeySource":"{{SOURCE}}","model":"claude-opus-5-5","tools":["Read","Edit","Write","Glob","Grep","Bash","StructuredOutput"],"claude_code_version":"2.1.311","permissionMode":"acceptEdits","cwd":"/w","future_field":{"x":1}}
+{"type":"assistant","message":{"id":"msg_e","content":[{"type":"text","text":"API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}"}]},"error":"server_error","session_id":"{{SESSION}}"}
+{"type":"result","subtype":"success","is_error":true,"num_turns":1,"result":"API Error: 529 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}","api_error_status":529,"session_id":"{{SESSION}}","total_cost_usd":0}
