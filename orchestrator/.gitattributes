@@ -1,0 +1,3 @@
+# Test fixtures and golden files are compared byte-for-byte; keep them exactly
+# as committed on every OS (no CRLF conversion on Windows checkouts).
+internal/**/testdata/** -text

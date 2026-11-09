@@ -76,3 +76,21 @@ A new output (event store, report writer, prompt builder, HTTP or MCP handler) m
 1. accept only typed data or text, and mask text with the run's `secure.Redactor`;
 2. never take `any` and serialize it by reflection;
 3. add a test that writes `securetest.All` into it and calls `AssertNoLeak` on what it produced.
+
+`aco validate-plan` (Phase 2) repeats plan text (titles, dependency text, gate labels) in its diagnostics. Its output
+goes through the same filtered printer, so registered secrets and credential patterns are masked in text and JSON
+output (`TestValidatePlanOutputMasksSecrets`). Unregistered opaque text inside a plan is plan content and is shown.
+
+Phase 3 outputs follow the same rules (`docs/lifecycle.md`):
+
+- **State database** (`internal/state`): every free-text column (reason details, titles, errors, model names, paths,
+  session IDs) and every JSON document (step intents and outcomes, reviews, gate summaries, finding data) is masked
+  before it is written; JSON is accepted only as bytes the caller marshalled from a typed value, and must stay valid
+  after masking. `TestStoreNeverStoresSecrets` writes the corpus through every write API and scans every column of
+  every table.
+- **Events** (`internal/events`): payloads hold only typed fields (`Str`, `Int`, `Bool`, `Strs`); strings and the
+  message are masked when the event is appended. `TestEventsNeverCarrySecrets` checks replayed and JSON-encoded events.
+- **Artifacts** (`internal/artifacts`): content is masked before the atomic write; streamed artifacts are masked as a
+  whole on `Commit`, so a secret split across writes is still caught. `TestArtifactsNeverStoreSecrets` covers the
+  encodings the redactor handles; hex, decimal, and Base64 forms are not masked in free text, so producers must not
+  write encoded secrets in the first place.

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0xyu/aco/schemas/event.schema.json",
+  "title": "ACO run event (aco.event/v1)",
+  "description": "One persisted run event. seq starts at 1 per run and increases by one per event. payload holds only strings, integers, booleans, and string lists; message is the event rendered in the operator language.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run_id", "seq", "type", "time", "stage", "phase", "payload", "message"],
+  "properties": {
+    "schema": {"const": "aco.event/v1"},
+    "run_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "seq": {"type": "integer", "minimum": 1},
+    "type": {"enum": ["run.created", "run.preflight.passed", "run.preflight.failed", "run.stage.started", "run.stage.completed", "plan.created", "plan.revised", "plan.review.completed", "plan.gate.passed", "plan.gate.failed", "plan.frozen", "phase.started", "phase.init.passed", "phase.init.failed", "phase.attempt.started", "phase.attempt.exhausted", "step.started", "step.completed", "gate.started", "gate.completed", "review.completed", "review.inconsistent", "triage.completed", "finding.opened", "finding.resolved", "finding.reopened", "finding.disputed", "finding.deferred", "guard.tripped", "policy.violation", "commit_gate.passed", "commit_gate.failed", "git.commit", "phase.completed", "phase.blocked", "final.check.completed", "final.gate.passed", "final.gate.failed", "report.written", "run.paused", "run.resumed", "run.completed", "run.blocked", "run.failed", "run.cancelled", "usage.warning", "usage.exceeded", "budget.warning", "budget.exceeded", "subscription.limit_reached", "subscription.reset", "auth.fallback", "auth.mode_changed", "agent.invocation.started", "agent.invocation.completed", "agent.invocation.failed"]},
+    "time": {"type": "string", "format": "date-time"},
+    "stage": {"enum": ["", "preflight", "planning", "plan_review", "execution", "final_verification"]},
+    "phase": {"type": "integer", "minimum": 0},
+    "payload": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string"},
+          {"type": "integer"},
+          {"type": "boolean"},
+          {"type": "array", "items": {"type": "string"}}
+        ]
+      }
+    },
+    "message": {"type": "string"}
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "format": "aco.validate-plan/v1",
+  "valid": true,
+  "strict": false,
+  "source": {
+    "kind": "dir",
+    "name": "plan"
+  },
+  "title": "Todo Service — Implementation Plan",
+  "plan_hash": "sha256:7fab738ee52047e90ae3f6356cf831e566f1572757ea3d66d7a4309e16b4c895",
+  "summary": {
+    "phases": 3,
+    "requirements": 4,
+    "acceptance_criteria": 9,
+    "errors": 0,
+    "warnings": 0
+  },
+  "phases": [
+    {
+      "id": "P01",
+      "number": 1,
+      "title": "Storage Layer",
+      "acceptance_criteria": 3,
+      "depends_on": [],
+      "requirements": [
+        "REQ-001",
+        "REQ-002",
+        "REQ-004"
+      ]
+    },
+    {
+      "id": "P02",
+      "number": 2,
+      "title": "HTTP API",
+      "acceptance_criteria": 3,
+      "depends_on": [
+        "P01"
+      ],
+      "requirements": [
+        "REQ-001",
+        "REQ-002",
+        "REQ-003"
+      ]
+    },
+    {
+      "id": "P03",
+      "number": 3,
+      "title": "Documentation",
+      "acceptance_criteria": 3,
+      "depends_on": [
+        "P01",
+        "P02"
+      ],
+      "requirements": [
+        "REQ-003"
+      ]
+    }
+  ],
+  "agents_md": {
+    "path": "AGENTS.md",
+    "sha256": "sha256:6edbba155941f54c72a7d250c0e554bd9004f95e64c80bd70fa3a292a625e80e"
+  },
+  "lock": null,
+  "diagnostics": []
+}

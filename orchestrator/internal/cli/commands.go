@@ -88,7 +88,7 @@ func commands() []*command {
 		{name: "report", summary: i18n.CmdReportSummary, args: i18n.CmdArgsRunID,
 			flags: []string{"phase", "final", "format"}},
 		{name: "validate-plan", summary: i18n.CmdValidatePlanSummary, args: i18n.CmdArgsPlanPath,
-			flags: []string{"strict", "json"}},
+			flags: []string{"strict", "json", "repo"}, run: runValidatePlan},
 		{name: "doctor", summary: i18n.CmdDoctorSummary,
 			flags: flagsOf(configFlags, authFlags, []string{"security"}), run: runDoctor},
 		{name: "serve", summary: i18n.CmdServeSummary,

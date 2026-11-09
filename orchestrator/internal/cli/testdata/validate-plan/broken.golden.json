@@ -1,0 +1,124 @@
+{
+  "format": "aco.validate-plan/v1",
+  "valid": false,
+  "strict": false,
+  "source": {
+    "kind": "markdown",
+    "name": "broken.md"
+  },
+  "title": "Broken Plan",
+  "plan_hash": "sha256:e266da1dd3cde28209a7f51ea42fc411e8ad610ebd4a9f073a3c907218ec4431",
+  "summary": {
+    "phases": 2,
+    "requirements": 2,
+    "acceptance_criteria": 3,
+    "errors": 6,
+    "warnings": 1
+  },
+  "phases": [
+    {
+      "id": "P01",
+      "number": 1,
+      "title": "Accounts",
+      "acceptance_criteria": 2,
+      "depends_on": [
+        "P02"
+      ],
+      "requirements": [
+        "REQ-001"
+      ]
+    },
+    {
+      "id": "P02",
+      "number": 2,
+      "title": "Sessions",
+      "acceptance_criteria": 1,
+      "depends_on": [
+        "P01"
+      ],
+      "requirements": []
+    }
+  ],
+  "agents_md": null,
+  "lock": null,
+  "diagnostics": [
+    {
+      "code": "front_matter_invalid",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 3,
+        "section": "front_matter"
+      },
+      "message": "front matter is not a valid ACO config: invalid_value at implementer.effort"
+    },
+    {
+      "code": "requirement_uncovered",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 8,
+        "ref": "REQ-002"
+      },
+      "message": "REQ-002 is not covered by any phase and acceptance criterion"
+    },
+    {
+      "code": "dependency_cycle",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 25,
+        "phase": "P01",
+        "section": "depends_on"
+      },
+      "message": "dependency cycle: P01 → P02 → P01"
+    },
+    {
+      "code": "forward_dependency",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 25,
+        "phase": "P01",
+        "section": "depends_on",
+        "ref": "P02"
+      },
+      "message": "P01 depends on P02, which is not an earlier phase"
+    },
+    {
+      "code": "gate_not_applicable_unjustified",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 31,
+        "phase": "P01",
+        "section": "quality_gates",
+        "ref": "integration"
+      },
+      "message": "P01: quality gate \"integration\" is not_applicable without a justification"
+    },
+    {
+      "code": "missing_gate_entry",
+      "severity": "error",
+      "location": {
+        "file": "broken.md",
+        "line": 31,
+        "phase": "P01",
+        "section": "quality_gates",
+        "ref": "security"
+      },
+      "message": "P01 has no entry for quality gate \"security\""
+    },
+    {
+      "code": "missing_goal",
+      "severity": "warning",
+      "location": {
+        "file": "broken.md",
+        "line": 38,
+        "phase": "P02",
+        "section": "goal"
+      },
+      "message": "P02 has no Goal"
+    }
+  ]
+}

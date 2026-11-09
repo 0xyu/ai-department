@@ -1,0 +1,16 @@
+计划：broken.md（单个 Markdown 文件）
+标题：Broken Plan
+阶段 2 个，需求 2 个，验收标准 3 条
+计划哈希：sha256:e266da1dd3cde28209a7f51ea42fc411e8ad610ebd4a9f073a3c907218ec4431
+阶段：
+  P01  Accounts（验收标准 2 条，依赖：P02）
+  P02  Sessions（验收标准 1 条，依赖：P01）
+问题：
+  [错误] broken.md:3#front-matter  front_matter_invalid：前置元数据不是有效的 ACO 配置：invalid_value（位于 implementer.effort）
+  [错误] broken.md:8  requirement_uncovered：REQ-002 没有被任何阶段和验收标准覆盖
+  [错误] broken.md:25#depends-on  dependency_cycle：存在循环依赖：P01 → P02 → P01
+  [错误] broken.md:25#depends-on  forward_dependency：P01 依赖 P02，但它不是更早的阶段
+  [错误] broken.md:31#quality-gates  gate_not_applicable_unjustified：P01：质量门“integration”标为 not_applicable，但没有给出理由
+  [错误] broken.md:31#quality-gates  missing_gate_entry：P01 缺少质量门“security”的条目
+  [警告] broken.md:38#goal  missing_goal：P02 没有 Goal（目标）小节
+结果：未通过（6 个错误，1 条警告）

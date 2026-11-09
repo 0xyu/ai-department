@@ -132,7 +132,7 @@ func TestHelpInEnglishWithUserConfigAndSet(t *testing.T) {
 func TestStubsExitTwoNotImplemented(t *testing.T) {
 	stubs := map[string][]string{
 		"run": nil, "plan": nil, "resume": {"r1"}, "status": nil, "pause": {"r1"}, "cancel": {"r1"},
-		"report": {"r1"}, "validate-plan": {"plan.md"}, "serve": nil, "mcp": nil, "hook": {"pre-tool-use"},
+		"report": {"r1"}, "serve": nil, "mcp": nil, "hook": {"pre-tool-use"},
 	}
 	for name, args := range stubs {
 		h := newHarness(t)

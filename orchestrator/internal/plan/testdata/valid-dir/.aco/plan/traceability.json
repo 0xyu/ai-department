@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "entries": [
+    {"requirement": "REQ-001", "phases": ["P01", "P02"], "acceptance_criteria": ["AC-01.1", "AC-02.1", "AC-02.2", "AC-02.3"]},
+    {"requirement": "REQ-002", "phases": [1, "Phase 2"], "acceptance_criteria": ["AC-01.2", "AC-02.1", "AC-02.2", "AC-02.3"]},
+    {"requirement": "REQ-003", "phases": ["P02", "P03"], "acceptance_criteria": ["AC-02.3", "AC-03.2"]},
+    {"requirement": "REQ-004", "phases": ["P01"], "acceptance_criteria": ["AC-01.1", "AC-01.2", "AC-01.3"]}
+  ]
+}

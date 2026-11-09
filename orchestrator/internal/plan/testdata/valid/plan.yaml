@@ -1,0 +1,81 @@
+version: 1
+title: Todo Service — Implementation Plan
+overview: |
+  A small HTTP service that stores todo items.
+config:
+  implementer:
+    effort: high
+requirements:
+  - {id: REQ-001, kind: functional, text: Users can create a todo item with a title.}
+  - {id: REQ-002, kind: functional, text: Users can list todo items.}
+  - {id: REQ-003, kind: non_functional, text: Every endpoint answers within 200 ms at the 95th percentile.}
+  - {id: REQ-004, kind: constraint, text: "Pure Go, no CGO."}
+phases:
+  - number: 1
+    title: Storage Layer
+    goal: Persist todo items in memory behind an interface.
+    scope:
+      in: ["`store` package with a `Store` interface and an in-memory implementation."]
+      out: [persistence to disk.]
+      paths: ["internal/store/**", go.mod]
+    technical_requirements: [Safe for concurrent use.]
+    acceptance_criteria:
+      - {id: AC-01.1, text: "`Create` returns the new item with an ID."}
+      - {id: AC-01.2, text: "`List` returns items in creation order."}
+      - text: |-
+          Concurrent `Create` calls from 100 goroutines all succeed:
+          1. no item is lost;
+          2. IDs are unique.
+    deliverables: ["`internal/store`"]
+    requirements: [REQ-001, REQ-002, REQ-004]
+    gates:
+      typecheck: {commands: [go vet ./...]}
+      lint: {commands: [staticcheck ./...]}
+      unit: {commands: [go test ./... -short -json]}
+      integration: {not_applicable: true, justification: the store has no external dependencies}
+      build:
+      security: {scanners: [secrets, govulncheck]}
+  - number: 2
+    title: HTTP API
+    goal: Expose the store over HTTP.
+    scope:
+      in: ["`POST /todos` and `GET /todos` handlers."]
+      paths: ["internal/api/**", "cmd/todo/**"]
+    acceptance_criteria:
+      - text: "`POST /todos` with a title returns 201 and the item."
+      - text: "`GET /todos` returns all items as JSON."
+      - text: A load test shows p95 latency under 200 ms.
+    deliverables: ["`internal/api`", "`cmd/todo`"]
+    depends_on: [P01]
+    requirements: [REQ-001, REQ-002, REQ-003]
+    gates:
+      typecheck: {commands: [go vet ./...]}
+      lint: {commands: [staticcheck ./...]}
+      unit: {commands: [go test ./... -short -json]}
+      integration: {commands: [go test -tags=integration ./... -json]}
+      build: {commands: [go build ./...]}
+      security: {commands: [gosec ./...], scanners: [secrets, gosec]}
+  - number: 3
+    title: Documentation
+    goal: Document the API.
+    scope:
+      in: [README with request examples.]
+    acceptance_criteria:
+      - {id: AC-03.1, text: README lists both endpoints with curl examples.}
+      - {id: AC-03.2, text: README states the latency target.}
+      - {id: AC-03.3, text: Examples in the README are checked by a test.}
+    deliverables: ["`README.md`"]
+    depends_on: [1, 2]
+    requirements: [REQ-003]
+    gates:
+      typecheck: {}
+      lint: {}
+      unit: {commands: [go test ./... -run Example]}
+      integration: {not_applicable: true, justification: documentation only}
+      build: {}
+      security: {scanners: [secrets]}
+traceability:
+  - {requirement: REQ-001, phases: [P01, P02], acceptance_criteria: [AC-01.1, AC-02.1, AC-02.2, AC-02.3]}
+  - {requirement: REQ-002, phases: [P01, P02], acceptance_criteria: [AC-01.2, AC-02.1, AC-02.2, AC-02.3]}
+  - {requirement: REQ-003, phases: [P02, P03], acceptance_criteria: [AC-02.3, AC-03.2]}
+  - {requirement: REQ-004, phases: [P01], acceptance_criteria: [AC-01.1, AC-01.2, AC-01.3]}

@@ -1,0 +1,16 @@
+Plan: broken.md (single Markdown file)
+Title: Broken Plan
+2 phases, 2 requirements, 3 acceptance criteria
+Plan hash: sha256:e266da1dd3cde28209a7f51ea42fc411e8ad610ebd4a9f073a3c907218ec4431
+Phases:
+  P01  Accounts (2 acceptance criteria, depends on: P02)
+  P02  Sessions (1 acceptance criteria, depends on: P01)
+Problems:
+  [error] broken.md:3#front-matter  front_matter_invalid: front matter is not a valid ACO config: invalid_value at implementer.effort
+  [error] broken.md:8  requirement_uncovered: REQ-002 is not covered by any phase and acceptance criterion
+  [error] broken.md:25#depends-on  dependency_cycle: dependency cycle: P01 → P02 → P01
+  [error] broken.md:25#depends-on  forward_dependency: P01 depends on P02, which is not an earlier phase
+  [error] broken.md:31#quality-gates  gate_not_applicable_unjustified: P01: quality gate "integration" is not_applicable without a justification
+  [error] broken.md:31#quality-gates  missing_gate_entry: P01 has no entry for quality gate "security"
+  [warning] broken.md:38#goal  missing_goal: P02 has no Goal
+Result: failed (6 errors, 1 warnings)

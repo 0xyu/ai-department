@@ -26,7 +26,7 @@ A bad value for an integer or boolean flag is reported by flag name and expected
 | `pause <run-id>` | stub | |
 | `cancel <run-id>` | stub | |
 | `report <run-id>` | stub | `--phase N --final --format md\|json` |
-| `validate-plan <file\|dir>` | stub | `--strict --json` |
+| `validate-plan <file\|dir>` | **implemented** (Phase 2) | `--strict --json --repo` |
 | `doctor` | **implemented (v1)** | `--repo --config --set --env-file --auth-mode --claude-auth-mode --codex-auth-mode --security` |
 | `serve` | stub | `--addr` (default `127.0.0.1:7420`) + config flags |
 | `mcp` | stub | `--transport stdio\|http` |
@@ -68,6 +68,17 @@ Exit code: 0 when nothing failed (warnings allowed), 3 when any check failed, 2 
 
 Version probes run with secret environment variables removed and `GIT_TERMINAL_PROMPT=0`. Later phases extend
 `doctor` with CLI capability checks (flags, effort, model availability, auth-source verification).
+
+## `aco validate-plan`
+
+Reads a plan package directory, a single Markdown plan, or a YAML/JSON plan and runs the deterministic plan checks
+(§10.4), the front matter config check, and, for a package directory with `plan.lock.json`, freeze-manifest
+verification. Text output lists the phases and every problem in the operator language; `--json` prints the
+`aco.validate-plan/v1` report. `--strict` makes warnings fail too. `--repo` names the repository for `AGENTS.md`
+discovery and lock verification (inferred for `<repo>/.aco/plan`).
+
+Exit code: 0 valid, 1 invalid plan, 2 usage error or unreadable path. Formats, check codes, and the JSON report are
+described in [plan-format.md](plan-format.md).
 
 ## Build info
 

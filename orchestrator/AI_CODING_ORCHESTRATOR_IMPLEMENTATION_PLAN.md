@@ -2,13 +2,14 @@
 
 | | |
 |---|---|
-| Status | Draft v2.1 (design + plan only, no code yet) |
+| Status | Draft v2.3 (Phases 1–3 implemented) |
 | Language | Go |
 | Binary | `aco` |
 | Date | 2026-11-07 |
 | Changes since v1.0 | Added Stage 1 (Plan Creation), Stage 2 (Independent Plan Review, Plan Decision Gate, Plan Freeze) and Stage 4 (Final Verification); AGENTS.md loading; phase dependency checks; Claude effort setting; six explicit quality gates incl. security scanning; regression analysis; finding triage; BLOCKED state; reviewed-tree-only commits; mandatory Phase Completion Reports; Final Development Report. Phases renumbered 1–14. |
 | Changes since v2.0 | **CLI-only model access:** Claude via Claude Code CLI, GPT (GPT Sol 6.1) via Codex CLI; no direct HTTP API calls or vendor SDKs. Usage limits (agent calls, turns, wall-clock) added. Open questions resolved (§21). Operator-facing messages in Simplified Chinese; documents, reports, prompts, and commits in English. |
 | Changes since v2.1 | **Dual auth mode selected by env:** each CLI runs in `subscription` mode (default) or `api` mode (API key, pay-as-you-go), set by `ACO_AUTH_MODE` with per-agent overrides and optional subscription→API fallback (§16.5). USD budgets apply in API mode. |
+| Changes since v2.2 | **Plan-format compliance:** numbered requirement list (§4.1, `REQ-001`–`REQ-030`), a Requirements section mapping each phase's requirements to the AC that verify them, and all six Quality Gates per phase, so `aco validate-plan` accepts this document. |
 
 ACO is a standalone program that turns a requirement into a reviewed, frozen Implementation Plan and then executes that plan phase by phase with no human in the loop:
 
@@ -86,6 +87,51 @@ Large software tasks need a plan, an independent check of that plan, and then ma
 | 3.6 Commit Gate, reviewed files only, Phase Completion Report | §11.8, §11.9 | Phase 4, Phase 9 |
 | 3.7 Next Phase with fresh session and latest state | §11.10 | Phase 10 |
 | Stage 4 Final Verification + Final Development Report | §12 | Phase 11 |
+
+### 4.1 Requirement IDs (REQ-NNN)
+
+ACO's plan format (§10.1) numbers requirements as `REQ-NNN`. This list restates §2 (FR-n), §3 (NFR-n), and the design
+constraints from §7 and §16 with those IDs. Each phase's **Requirements** section maps the requirements it delivers to
+the acceptance criteria that verify them; `aco validate-plan` checks that every requirement is covered.
+
+#### Functional requirements
+
+- REQ-001: (FR-1) Accept a Git repository and either a requirement document (full flow from Stage 1) or an existing Implementation Plan (Stage 1 skipped, Stage 2 still mandatory).
+- REQ-002: (FR-2) Stage 1: Claude Opus 5.5 produces the plan package: Implementation Plan, Phase Specifications, Acceptance Criteria with IDs, requirement traceability, quality gate configuration, and AGENTS.md if missing.
+- REQ-003: (FR-3) Stage 2: GPT independently reviews the plan for architecture, technical approach, requirement coverage, dependencies, and risks.
+- REQ-004: (FR-4) Plan Decision Gate: PASS freezes the plan (hash-locked, committed, immutable for the run); FAIL sends it back to Claude for revision and GPT re-review, up to a limit, then BLOCKED.
+- REQ-005: (FR-5) Phase Initialization: fresh Claude session; frozen plan, current Phase Specification, and AGENTS.md loaded; Git baseline and phase dependencies checked.
+- REQ-006: (FR-6) Implementation: Claude Opus 5.5 at medium effort implements the phase, writes and updates tests, and does not modify unrelated code.
+- REQ-007: (FR-7) Automated quality gates (type check, lint, unit tests, integration tests, build, security scanning) run by the orchestrator, not by the agent.
+- REQ-008: (FR-8) Independent GPT code review of the plan conformance, acceptance criteria, complete Git diff, security and regression risk, and automated test results.
+- REQ-009: (FR-9) Review Decision Gate: PASS goes to the Commit Gate; FAIL classifies issues and runs fix, gates, and re-review; an exceeded limit or unsafe issue makes the phase BLOCKED, never force-committed.
+- REQ-010: (FR-10) Commit Gate: verify all gates, stage exactly the reviewed files, commit automatically, and write a Phase Completion Report.
+- REQ-011: (FR-11) Next phase: a new Claude session loaded with the latest state, repeated until all phases are done.
+- REQ-012: (FR-12) Stage 4: full build, full regression tests, final security scan, check of all Phase Completion Reports, and a Final Development Report.
+- REQ-013: (FR-13) Fully automatic: no human approval in Stages 1–4; human action only after a run ends BLOCKED or FAILED.
+- REQ-014: (FR-14) The orchestrator owns Git (run branch, isolated worktree, checkpoints, commits, tags, change records); agents cannot commit, push, or rewrite history.
+- REQ-015: (FR-15) All state is persisted; runs survive crashes and are resumable.
+- REQ-016: (FR-16) Standalone CLI and service with no dependency on AI Department.
+- REQ-017: (FR-17) Versioned integration surface: Go library, HTTP API with events and webhooks, MCP server, and plugin contract.
+
+#### Non-functional requirements
+
+- REQ-018: (NFR-1) Reliability: every state transition is persisted; steps are idempotent or reconcilable on resume.
+- REQ-019: (NFR-2) Safety: confined worktree, tool allowlist, pre-tool policy hook, protected paths, secret and security scanning, optional container isolation.
+- REQ-020: (NFR-3) Auditability: every prompt, transcript, diff, gate log, review, decision, and report is stored and linked to the commit it produced.
+- REQ-021: (NFR-4) Usage control: limits per run, stage, phase, and invocation in both auth modes; USD budgets in API mode; subscription limits handled by pause and auto-resume or API fallback.
+- REQ-022: (NFR-5) Deterministic decisions: the plan, quality, review, commit, and final gates are computed by orchestrator code from structured data.
+- REQ-023: (NFR-6) Portability: Windows, macOS, and Linux.
+- REQ-024: (NFR-7) Testability: implementer, reviewer, gate runner, and Git sit behind interfaces with scripted fakes; the full pipeline is testable offline.
+- REQ-025: (NFR-8) Extensibility: implementer, reviewer, and security scanners are pluggable.
+- REQ-026: (NFR-9) Dual auth mode: each CLI runs in subscription or API-key mode chosen by environment configuration, verified on every call so it never bills the other way silently.
+- REQ-027: (NFR-10) Language: operator-facing output in Simplified Chinese; plans, reports, prompts, commits, and machine fields in English; both configurable.
+
+#### Constraints
+
+- REQ-028: Models are reached only through the vendor CLIs (Claude Code CLI, Codex CLI); no direct model HTTP API calls and no vendor SDK dependency (§7, §16.5).
+- REQ-029: Implemented in Go as the single binary `aco`, with pure-Go dependencies and no CGO (§9, NFR-6).
+- REQ-030: Secrets come only from the process environment, the ACO env file, or the OS keychain; never from config files, plans, or the repository, and never written to logs, artifacts, events, prompts, or reports (§16.4).
 
 ## 5. Assumptions
 
@@ -573,6 +619,8 @@ stateDiagram-v2
     Cancelled --> [*]
 ```
 
+This diagram is abridged. The full transition tables implemented in Phase 3 (Blocked from every stage, Failed and Cancelled from every active status, paused runs resume only to the status they paused from, and human resume from Blocked or Failed) are in `docs/lifecycle.md`.
+
 - **Blocked** = ACO could not reach the required quality safely (plan not approvable, phase not fixable, unsafe, spec conflict, final verification not passing). Needs a human decision.
 - **Failed** = system problem (environment broken, internal error, hard usage limit or USD budget exceeded, CLI not authenticated in the selected mode, API quota exhausted).
 - Both keep all work and are resumable (§14.4).
@@ -902,7 +950,7 @@ limits: { … see §14.3 … }
 
 Conventions for all phases:
 
-- Go module `github.com/<owner>/aco`, Go ≥ 1.22, `gofmt`/`go vet`/`staticcheck` clean, `go test ./... -race` green on Linux, Windows, and macOS CI.
+- Go module `github.com/<owner>/aco`, Go ≥ 1.22 (raised to 1.26 in Phase 3, required by `modernc.org/sqlite`), `gofmt`/`go vet`/`staticcheck` clean, `go test ./... -race` green on Linux, Windows, and macOS CI.
 - Acceptance tests do not depend on live models. Live tests run only with `ACO_LIVE_TESTS=1`: locally in subscription mode, or in CI in API mode when API keys are provided as CI secrets (optional, small budget).
 - No dependency on any model vendor SDK (`go list -deps` check in CI).
 - Every public type, command, schema, and event added in a phase is documented in `docs/` in the same phase.
@@ -944,6 +992,22 @@ Create the repository skeleton, configuration system (including planner/implemen
 ### Deliverables
 - Skeleton, `cmd/aco`, `internal/config`, `internal/i18n`, logging, CI workflow, `docs/config.md`.
 
+### Requirements
+- REQ-016: AC-01.1
+- REQ-023: AC-01.9
+- REQ-026: AC-01.4, AC-01.6
+- REQ-027: AC-01.7
+- REQ-029: AC-01.9
+- REQ-030: AC-01.5, AC-01.8
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: not_applicable — Phase 1 adds only config loading, the CLI tree, and `doctor`, whose external tools (git, claude, codex) are faked in unit tests; there is no subsystem to integrate yet, and the three-OS CI matrix covers the build
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 2: Plan Package Model, Parser, and Deterministic Plan Checks
 
 ### Goal
@@ -970,6 +1034,18 @@ Represent, parse, and deterministically validate plan packages (requirements, pl
 
 ### Deliverables
 - `internal/plan`, `schemas/plan.schema.json`, fixtures, `docs/plan-format.md`.
+
+### Requirements
+- REQ-004: AC-02.2, AC-02.4
+- REQ-022: AC-02.2, AC-02.5
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: not_applicable — plan parsing, the deterministic checks, and the freeze manifest work on plan text and temporary fixture directories inside unit tests; no external process, service, or Git repository is involved
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
 
 ## Phase 3: State Store, Events, Artifacts, Lifecycle State Machines, and Run Lock
 
@@ -999,6 +1075,20 @@ Provide durable, transactional state and typed events for all four stages, inclu
 ### Deliverables
 - `internal/state`, `internal/events`, `internal/artifacts`, `docs/lifecycle.md` with diagrams.
 
+### Requirements
+- REQ-015: AC-03.1, AC-03.2, AC-03.3
+- REQ-018: AC-03.2, AC-03.4
+- REQ-020: AC-03.4, AC-03.5
+- REQ-030: AC-03.5
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/state/... ./internal/events/... ./internal/artifacts/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 4: Git Manager — Worktree, Freeze, Checkpoints, Reviewed-Tree Commits
 
 ### Goal
@@ -1024,6 +1114,19 @@ Give the orchestrator full and safe control of Git, including plan freeze commit
 
 ### Deliverables
 - `internal/gitops`, `internal/policy` (diff policy, secret scan, anti-gaming), `docs/git.md`.
+
+### Requirements
+- REQ-006: AC-04.4, AC-04.5
+- REQ-010: AC-04.2, AC-04.3
+- REQ-014: AC-04.1, AC-04.6
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/gitops/... ./internal/policy/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
 
 ## Phase 5: Claude Code Adapter — Planner and Implementer
 
@@ -1060,6 +1163,23 @@ Run Claude Code headlessly as a read-only planner (Stage 1) and as an implemente
 ### Deliverables
 - `internal/agent`, `internal/agent/claudecode`, guard hook, fakes, `schemas/impl-report.schema.json`, prompts, `docs/claude-adapter.md`.
 
+### Requirements
+- REQ-002: AC-05.7
+- REQ-006: AC-05.2
+- REQ-014: AC-05.5
+- REQ-019: AC-05.5
+- REQ-023: AC-05.6
+- REQ-026: AC-05.3, AC-05.4
+- REQ-028: AC-05.2
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/agent/claudecode/... ./internal/policy/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 6: Quality Gate Runner — Six Gates, Security Scanning, Regression Baseline
 
 ### Goal
@@ -1088,6 +1208,18 @@ Run Type Check, Lint, Unit Tests, Integration Tests, Build, and Security Scannin
 
 ### Deliverables
 - `internal/gates`, scanner adapters, fixture repos, `docs/quality-gates.md`.
+
+### Requirements
+- REQ-007: AC-06.1, AC-06.2, AC-06.3, AC-06.4
+- REQ-025: AC-06.1, AC-06.3
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/gates/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
 
 ## Phase 7: GPT Reviewer via Codex CLI — Plan Review and Code Review
 
@@ -1126,6 +1258,21 @@ Provide an independent, read-only GPT Sol 6.1 reviewer, called through Codex CLI
 ### Deliverables
 - `internal/agent/codexreview`, `internal/auth` (Codex), both review schemas, prompts, fake reviewer, `docs/reviewer.md`.
 
+### Requirements
+- REQ-003: AC-07.1, AC-07.7
+- REQ-008: AC-07.1, AC-07.3
+- REQ-026: AC-07.5, AC-07.6
+- REQ-027: AC-07.5
+- REQ-028: AC-07.2
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/agent/codexreview/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 8: Stage 1 & Stage 2 — Plan Creation, Plan Review, Plan Gate, and Freeze
 
 ### Goal
@@ -1155,6 +1302,20 @@ Implement the planning stages end-to-end: Claude creates the plan package, GPT r
 
 ### Depends On
 Phase 2, Phase 4, Phase 5, Phase 7
+
+### Requirements
+- REQ-001: AC-08.4, AC-08.5
+- REQ-002: AC-08.5
+- REQ-003: AC-08.2
+- REQ-004: AC-08.1, AC-08.2, AC-08.3
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/engine/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
 
 ## Phase 9: Stage 3 Phase Engine — Initialization, Gates, Review, Triage, BLOCKED, Commit Gate, Completion Report
 
@@ -1195,6 +1356,23 @@ Implement one complete phase iteration exactly as specified in §11: initializat
 ### Depends On
 Phase 3, Phase 4, Phase 5, Phase 6, Phase 7, Phase 8
 
+### Requirements
+- REQ-005: AC-09.1, AC-09.3
+- REQ-009: AC-09.1
+- REQ-010: AC-09.1, AC-09.2
+- REQ-020: AC-09.2
+- REQ-022: AC-09.1
+- REQ-024: AC-09.1
+- REQ-025: AC-09.1
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/engine/... ./internal/reports/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 10: Run Lifecycle, Phase Isolation, and Recovery
 
 ### Goal
@@ -1232,6 +1410,24 @@ Drive full runs across all phases with a fresh Claude session per phase, pause/r
 ### Depends On
 Phase 8, Phase 9
 
+### Requirements
+- REQ-001: AC-10.1
+- REQ-011: AC-10.1
+- REQ-013: AC-10.1, AC-10.6, AC-10.7
+- REQ-015: AC-10.2
+- REQ-018: AC-10.2
+- REQ-021: AC-10.3, AC-10.4, AC-10.5
+- REQ-024: AC-10.1
+- REQ-026: AC-10.4
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./test/e2e/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 11: Stage 4 — Final Verification and Final Development Report
 
 ### Goal
@@ -1263,6 +1459,19 @@ Verify the finished project as a whole and produce the Final Development Report,
 ### Depends On
 Phase 6, Phase 9, Phase 10
 
+### Requirements
+- REQ-012: AC-11.1, AC-11.2, AC-11.3, AC-11.4, AC-11.5
+- REQ-020: AC-11.1
+- REQ-022: AC-11.2, AC-11.4
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/engine/... ./test/e2e/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 12: Security Hardening and Sandbox Mode
 
 ### Goal
@@ -1291,6 +1500,18 @@ Make unattended runs safe by default and offer container isolation for long or u
 
 ### Depends On
 Phase 5, Phase 6, Phase 10
+
+### Requirements
+- REQ-019: AC-12.1, AC-12.2, AC-12.3
+- REQ-030: AC-12.4
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/sandbox/... ./test/security/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
 
 ## Phase 13: HTTP API, Event Stream, Webhooks, and Go Client
 
@@ -1321,6 +1542,18 @@ Expose ACO as a service with a stable, versioned API covering all four stages, s
 ### Depends On
 Phase 10, Phase 11
 
+### Requirements
+- REQ-017: AC-13.1, AC-13.2, AC-13.3
+- REQ-024: AC-13.2
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/api/... ./pkg/client/... -json`
+- build: `CGO_ENABLED=0 go build ./...`
+- security: scanners: secrets, gosec, govulncheck
+
 ## Phase 14: MCP Server, AI Department Plugin Contract, Dogfooding, and Release
 
 ### Goal
@@ -1349,6 +1582,21 @@ Make ACO callable by AI agents (including AI Department) through MCP and a docum
 
 ### Depends On
 Phase 12, Phase 13
+
+### Requirements
+- REQ-013: AC-14.3
+- REQ-016: AC-14.4
+- REQ-017: AC-14.1, AC-14.2
+- REQ-023: AC-14.5
+- REQ-029: AC-14.5
+
+### Quality Gates
+- typecheck: `go vet ./...`
+- lint: `test -z "$(gofmt -l .)"`; `staticcheck ./...`
+- unit: `go test ./... -short -json`
+- integration: `go test -tags=integration ./internal/mcpserver/... ./integrations/... -json`
+- build: `CGO_ENABLED=0 go build ./...`; `goreleaser build --snapshot --clean`
+- security: scanners: secrets, gosec, govulncheck
 
 ---
 

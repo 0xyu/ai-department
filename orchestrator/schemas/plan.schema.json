@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/0xyu/aco/schemas/plan.schema.json",
+  "title": "ACO plan package (structured form, v1)",
+  "description": "A plan package as one YAML or JSON document. Stage 1 returns this shape; `aco validate-plan` reads it from .yaml/.yml/.json files. The Markdown and package-directory forms describe the same model (docs/plan-format.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "title", "requirements", "phases", "traceability"],
+  "properties": {
+    "version": {"const": 1},
+    "title": {"type": "string", "minLength": 1},
+    "overview": {"type": "string", "description": "Body of IMPLEMENTATION_PLAN.md: goals, architecture, technical approach, risks."},
+    "config": {"type": "object", "description": "ACO config overrides (the plan config layer); same schema as .aco.yaml, no secrets."},
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "text"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^REQ-[0-9]{3,6}$"},
+          "kind": {"enum": ["functional", "non_functional", "constraint"]},
+          "text": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/phase"}
+    },
+    "traceability": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement", "phases", "acceptance_criteria"],
+        "properties": {
+          "requirement": {"type": "string", "pattern": "^REQ-[0-9]{3,6}$"},
+          "phases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/phaseRef"}},
+          "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/acId"}}
+        }
+      }
+    },
+    "agents_md": {"type": "string", "description": "Proposed AGENTS.md, only when the repository has none."}
+  },
+  "$defs": {
+    "phaseRef": {
+      "description": "A phase number (3) or ID (\"P03\", \"Phase 3\").",
+      "oneOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "string", "pattern": "^([Pp]|[Pp]hase ?)?0*[1-9][0-9]{0,3}$"}
+      ]
+    },
+    "acId": {"type": "string", "pattern": "^AC-[0-9]{2,4}\\.[1-9][0-9]*$"},
+    "gate": {
+      "description": "One quality gate entry. Empty: required, commands resolved from config or auto-detection.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "commands": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "scanners": {"type": "array", "items": {"enum": ["secrets", "gosec", "govulncheck", "semgrep", "npm-audit", "pip-audit", "trivy"]}},
+        "not_applicable": {"type": "boolean"},
+        "justification": {"type": "string"}
+      },
+      "if": {"properties": {"not_applicable": {"const": true}}, "required": ["not_applicable"]},
+      "then": {
+        "required": ["justification"],
+        "properties": {"justification": {"minLength": 1}, "commands": {"maxItems": 0}, "scanners": {"maxItems": 0}}
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "title", "goal", "scope", "acceptance_criteria", "deliverables", "gates"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1},
+        "goal": {"type": "string", "minLength": 1},
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "in": {"type": "array", "items": {"type": "string"}},
+            "out": {"type": "array", "items": {"type": "string"}},
+            "paths": {"type": "array", "items": {"type": "string"}, "description": "scope.paths globs (slash-separated)"}
+          }
+        },
+        "technical_requirements": {"type": "array", "items": {"type": "string"}},
+        "acceptance_criteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["text"],
+            "properties": {
+              "id": {"$ref": "#/$defs/acId", "description": "Optional; numbered AC-NN.<position> when omitted."},
+              "text": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "deliverables": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "depends_on": {"type": "array", "items": {"$ref": "#/$defs/phaseRef"}},
+        "requirements": {"type": "array", "items": {"type": "string", "pattern": "^REQ-[0-9]{3,6}$"}},
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["typecheck", "lint", "unit", "integration", "build", "security"],
+          "properties": {
+            "typecheck": {"$ref": "#/$defs/gate"},
+            "lint": {"$ref": "#/$defs/gate"},
+            "unit": {"$ref": "#/$defs/gate"},
+            "integration": {"$ref": "#/$defs/gate"},
+            "build": {"$ref": "#/$defs/gate"},
+            "security": {"$ref": "#/$defs/gate"}
+          }
+        }
+      }
+    }
+  }
+}
